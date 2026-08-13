@@ -34,7 +34,7 @@ env/
 *.swo
 
 # VaaniRAG specific
-backend/data/
+# backend/data/
 artifacts/
 .pytest_cache/
 tests/
