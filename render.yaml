@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: VaaniRAG
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "PYTHONPATH=.. uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: STT_BACKEND
+        value: sarvam
+      - key: GENERATOR_BACKEND
+        value: groq
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
