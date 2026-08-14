@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -39,6 +39,8 @@ from backend.schemas.ask import (
     TextQueryRequest,
 )
 from backend.voice.stt import get_stt
+from backend.voice.sarvam_ws import SarvamStream, Transcript, SpeechEvent
+import asyncio
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vaanirag")
@@ -254,6 +256,148 @@ def run_pipeline(transcript: str, stt_ms: float, language: str | None = None) ->
             generation_ms=generation_ms, guardrail_ms=guardrail_ms, total_ms=total_ms,
         ),
     )
+
+
+@app.websocket("/ws/voice")
+async def websocket_voice_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    # Initialize generators
+    ext_gen = get_generator("extractive")
+    groq_gen = get_generator("groq")
+    
+    api_key = os.environ.get("SARVAM_API_KEY")
+    if not api_key:
+        await websocket.close(code=1011, reason="No STT API key")
+        return
+
+    try:
+        async with SarvamStream(api_key) as stream:
+            
+            # Start receiving STT events in background
+            async def receive_stt():
+                final_transcript = None
+                stt_latency = 0.0
+                async for event in stream.receive():
+                    if isinstance(event, Transcript):
+                        await websocket.send_json({
+                            "type": "transcript_partial",
+                            "text": event.text,
+                            "is_final": event.is_final
+                        })
+                        if event.is_final:
+                            final_transcript = event.text
+                            stt_latency = event.elapsed_ms
+                return final_transcript, stt_latency
+
+            receive_task = asyncio.create_task(receive_stt())
+
+            # Receive audio from browser
+            while True:
+                data = await websocket.receive_bytes()
+                if not data: # EOF / flush
+                    await stream.flush()
+                    break
+                await stream.send_audio(data)
+
+            transcript, stt_ms = await receive_task
+            
+            if not transcript:
+                await websocket.send_json({"type": "error", "message": "No transcript received"})
+                return
+
+            t_start = time.perf_counter()
+
+            # Guardrail 1-3
+            g0 = time.perf_counter()
+            input_check = guardrails.check_input(transcript)
+            guardrail_ms = (time.perf_counter() - g0) * 1000
+
+            if not input_check.allowed:
+                await websocket.send_json({"type": "refused", "reason": input_check.reason, "stage": input_check.stage})
+                return
+
+            # Retrieval
+            r0 = time.perf_counter()
+            candidates = _index.hybrid_search(transcript, top_n=3)
+            retrieval_ms = (time.perf_counter() - r0) * 1000
+
+            # Rerank
+            rr0 = time.perf_counter()
+            top_chunks = rerank_chunks(transcript, candidates, top_n=2)
+            rerank_ms = (time.perf_counter() - rr0) * 1000
+
+            # Guardrail 4
+            g1 = time.perf_counter()
+            ret_check = guardrails.check_retrieval(top_chunks)
+            guardrail_ms += (time.perf_counter() - g1) * 1000
+            if not ret_check.allowed:
+                await websocket.send_json({"type": "refused", "reason": ret_check.reason, "stage": ret_check.stage, "score": top_chunks[0].get("relevance_score", 0)})
+                return
+
+            # Tier 1: Extractive
+            tier1_start = time.perf_counter()
+            tier1_answer = ext_gen.generate(transcript, top_chunks)
+            tier1_ms = (time.perf_counter() - tier1_start) * 1000
+            
+            sources_out = [
+                {
+                    "chunk_id": c["chunk_id"], "doc_id": c["doc_id"], 
+                    "text": c["text"], "language": c["language"], 
+                    "relevance_score": c["relevance_score"]
+                } for c in top_chunks
+            ]
+
+            await websocket.send_json({
+                "type": "tier1",
+                "answer": tier1_answer,
+                "sources": sources_out,
+                "latencies": {
+                    "stt_ms": stt_ms,
+                    "retrieval_ms": retrieval_ms,
+                    "rerank_ms": rerank_ms,
+                    "tier1_ms": tier1_ms,
+                    "guardrail_ms": guardrail_ms
+                }
+            })
+
+            # Tier 2: Generative
+            t2_start = time.perf_counter()
+            try:
+                tier2_answer = await asyncio.to_thread(groq_gen.generate, transcript, top_chunks)
+                t2_ms = (time.perf_counter() - t2_start) * 1000
+                
+                g2 = time.perf_counter()
+                out_check = guardrails.check_output_grounding(tier2_answer, top_chunks)
+                guardrail_ms += (time.perf_counter() - g2) * 1000
+
+                if out_check.allowed:
+                    await websocket.send_json({
+                        "type": "tier2",
+                        "answer": tier2_answer,
+                        "grounding_score": guardrails.grounding_score(tier2_answer, top_chunks),
+                        "latencies": {
+                            "generation_ms": t2_ms,
+                            "guardrail_ms": guardrail_ms
+                        }
+                    })
+                else:
+                    await websocket.send_json({
+                        "type": "tier2_refused",
+                        "reason": out_check.reason
+                    })
+            except Exception as e:
+                await websocket.send_json({"type": "tier2_error", "message": str(e)})
+
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass
+        
+
 
 
 @app.post("/query", response_model=AskResponse)

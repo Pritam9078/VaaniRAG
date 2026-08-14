@@ -83,9 +83,31 @@ class SentenceTransformerEmbedder(BaseEmbedder):
         return np.asarray(vecs, dtype="float32")
 
 
-def get_embedder(backend: str = "tfidf_svd", **kwargs) -> BaseEmbedder:
+class Model2VecEmbedder(BaseEmbedder):
+    """Extremely fast token embeddings pooled by lookup and averaging."""
+
+    def __init__(self, model_name: str = "minishlab/potion-multilingual-128M"):
+        from model2vec import StaticModel  # noqa: local import
+        self.model = StaticModel.from_pretrained(model_name)
+        probe = self.model.encode(["warm"])
+        self.dim = int(np.asarray(probe).shape[-1])
+
+    def fit(self, corpus: list[str]) -> Model2VecEmbedder:
+        return self  # pretrained, no fitting needed
+
+    def encode(self, texts: list[str]) -> np.ndarray:
+        vecs = self.model.encode(texts, batch_size=1024, use_multiprocessing=False)
+        vecs = np.asarray(vecs, dtype=np.float32)
+        norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+        np.maximum(norms, 1e-12, out=norms)
+        return (vecs / norms).astype("float32")
+
+
+def get_embedder(backend: str = "model2vec", **kwargs) -> BaseEmbedder:
     if backend == "tfidf_svd":
         return TfidfSvdEmbedder(**kwargs)
     if backend == "sentence_transformer":
         return SentenceTransformerEmbedder(**kwargs)
+    if backend == "model2vec":
+        return Model2VecEmbedder(**kwargs)
     raise ValueError(f"Unknown embedding backend: {backend}")

@@ -42,6 +42,7 @@ def build_index(corpus_path: str | None, out_dir: str,
     all_chunks: list[Chunk] = []
     queries = []
     docs_processed = 0  # Initialize docs_processed outside
+    seen_chunk_hashes = set()
     
     if corpus_path:
         corpus_path_obj = Path(corpus_path)
@@ -52,7 +53,13 @@ def build_index(corpus_path: str | None, out_dir: str,
             for passage in doc["passages"]:
                 lang = passage["lang"]
                 text = passage["text"]
-                all_chunks.extend(chunk_document(f"{doc_id}:{lang}", text, lang, strategies))
+                import hashlib
+                chunks = chunk_document(f"{doc_id}:{lang}", text, lang, strategies)
+                for c in chunks:
+                    chunk_hash = hashlib.sha256(c.text.encode('utf-8')).hexdigest()
+                    if chunk_hash not in seen_chunk_hashes:
+                        seen_chunk_hashes.add(chunk_hash)
+                        all_chunks.append(c)
             docs_processed += 1
     else:
         from backend.scripts.fetch_msmarco import stream_msmarco
@@ -64,9 +71,16 @@ def build_index(corpus_path: str | None, out_dir: str,
                 text = passage["text"]
                 is_sel = passage.get("is_selected", 0)
                 chunks = chunk_document(f"{doc_id}:{lang}", text, lang, strategies, is_selected=is_sel)
-                all_chunks.extend(chunks)
-                if is_sel:
-                    expected_chunks.extend([c.chunk_id for c in chunks])
+                
+                # Hashed query/chunk deduplication
+                import hashlib
+                for c in chunks:
+                    chunk_hash = hashlib.sha256(c.text.encode('utf-8')).hexdigest()
+                    if chunk_hash not in seen_chunk_hashes:
+                        seen_chunk_hashes.add(chunk_hash)
+                        all_chunks.append(c)
+                        if is_sel:
+                            expected_chunks.append(c.chunk_id)
             
             if expected_chunks and doc.get("query_tgt"):
                 queries.append({

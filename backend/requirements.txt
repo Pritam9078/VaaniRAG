@@ -11,3 +11,10 @@ faiss-cpu>=1.8
 requests
 groq
 av
+
+# Phase 2 Dependencies
+model2vec
+onnxruntime
+huggingface-hub
+tokenizers
+sentence-transformers

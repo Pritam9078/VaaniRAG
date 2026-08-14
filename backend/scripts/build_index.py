@@ -18,7 +18,7 @@ if __name__ == "__main__":
         corpus_path=None, # Will use stream in indexing.py
         out_dir=str(ROOT / "backend" / "data" / "index"),
         strategies=["fixed", "sentence", "semantic", "adaptive"],
-        embedding_backend="tfidf_svd",
+        embedding_backend="model2vec",
         sample_size=args.sample_size
     )
     print(json.dumps(stats, indent=2))
