@@ -46,14 +46,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vaanirag")
 
 APP_DIR = Path(__file__).resolve().parent
-INDEX_DIR = APP_DIR / "data" / "index"
+INDEX_DIR = APP_DIR / "artifacts" / "msmarco_xi" / "v001"
 
 load_dotenv(APP_DIR / ".env")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _index
-    if not (INDEX_DIR / "faiss.index").exists():
+    if not (INDEX_DIR / "dense.index").exists():
         logger.warning(
             "No index found at %s -- run `python -m backend.scripts.build_index` first.",
             INDEX_DIR,

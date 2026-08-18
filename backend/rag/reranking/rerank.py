@@ -35,7 +35,7 @@ def _jaccard(a: set, b: set) -> float:
 
 
 class JinaReranker:
-    def __init__(self, model_id: str = "jinaai/jina-reranker-v2-base-multilingual", max_length: int = 256):
+    def __init__(self, model_id: str = "jinaai/jina-reranker-v2-base-multilingual", max_length: int = 128):
         try:
             import onnxruntime as ort
             from huggingface_hub import hf_hub_download

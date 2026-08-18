@@ -25,7 +25,7 @@ from backend.rag.retrieval.retrieval import HybridIndex
 from evaluation.retrieval_eval import calculate_metrics
 
 ROOT = Path(__file__).resolve().parents[1]
-INDEX_DIR = ROOT / "backend" / "data" / "index"
+INDEX_DIR = ROOT / "backend" / "artifacts" / "msmarco_xi" / "v001"
 CORPUS_PATH = ROOT / "backend" / "data" / "sample_corpus.json"
 
 # Base set of real queries drawn from the corpus, plus paraphrases and a
@@ -92,9 +92,9 @@ def percentile(values: list[float], p: float) -> float:
     return values[f] + (values[c] - values[f]) * (k - f)
 
 
-def run_benchmark(n: int = 120):
+def run_benchmark(n: int = 120, no_llm: bool = False):
     index = HybridIndex(str(INDEX_DIR))
-    generator = get_generator()
+    generator = get_generator() if not no_llm else None
     queries = build_query_set(n)
 
     timings = {"retrieval_ms": [], "rerank_ms": [], "generation_ms": [],
@@ -104,6 +104,17 @@ def run_benchmark(n: int = 120):
 
     retrieval_results = []
     
+    print("Warming up index and reranker...")
+    warmup_q = "warmup query"
+    warmup_c = index.hybrid_search(warmup_q, top_n=5)
+    rerank_chunks(warmup_q, warmup_c, top_n=3)
+    if not no_llm and generator:
+        try:
+            generator.generate(warmup_q, warmup_c)
+        except Exception:
+            pass
+
+    print(f"Running Benchmark ({n} queries)...")
     for q_obj in queries:
         q = q_obj["query"]
         expected_chunk_ids = q_obj.get("expected_chunk_ids", [])
@@ -118,11 +129,11 @@ def run_benchmark(n: int = 120):
             continue
 
         r0 = time.perf_counter()
-        candidates = index.hybrid_search(q, top_n=3)
+        candidates = index.hybrid_search(q, top_n=5)
         r_ms = (time.perf_counter() - r0) * 1000
 
         rr0 = time.perf_counter()
-        top_chunks = rerank_chunks(q, candidates, top_n=2)
+        top_chunks = rerank_chunks(q, candidates, top_n=3)
         rr_ms = (time.perf_counter() - rr0) * 1000
 
         g1 = time.perf_counter()
@@ -141,8 +152,17 @@ def run_benchmark(n: int = 120):
         retrieval_results.append({
             "query": q,
             "expected_chunk_ids": expected_chunk_ids,
-            "retrieved_ids": [c.chunk_id for c in top_chunks]
+            "retrieved_ids": [c["chunk_id"] for c in top_chunks]
         })
+
+        if no_llm:
+            total_ms = (time.perf_counter() - t_start) * 1000
+            timings["retrieval_ms"].append(r_ms)
+            timings["rerank_ms"].append(rr_ms)
+            timings["guardrail_ms"].append(g_ms)
+            timings["total_ms"].append(total_ms)
+            answered += 1
+            continue
 
         gen0 = time.perf_counter()
         answer = generator.generate(q, top_chunks)
@@ -165,6 +185,9 @@ def run_benchmark(n: int = 120):
         timings["guardrail_ms"].append(g_ms)
         timings["total_ms"].append(total_ms)
 
+        if not no_llm:
+            time.sleep(1.5)
+
     report: dict[str, Any] = {"n_queries": n, "answered": answered, "refused": refused}  # type: ignore
     report["retrieval_metrics"] = calculate_metrics(retrieval_results)
     
@@ -183,9 +206,10 @@ def run_benchmark(n: int = 120):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--n", type=int, default=120)
+    parser.add_argument("--no_llm", action="store_true")
     args = parser.parse_args()
 
-    report = run_benchmark(args.n)
+    report = run_benchmark(args.n, args.no_llm)
     print(json.dumps(report, indent=2))
 
     out_path = ROOT / "backend" / "data" / "benchmark_report.json"

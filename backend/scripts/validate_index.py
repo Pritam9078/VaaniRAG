@@ -1,77 +1,78 @@
-#!/usr/bin/env python3
 import json
-import logging
-import os
-import sys
+import pickle
+import faiss
 from pathlib import Path
+import sys
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger(__name__)
-
-def validate_index(artifacts_dir: str, version: str) -> bool:
-    base_path = Path(artifacts_dir) / version
+def main():
+    root = Path(__file__).resolve().parent.parent.parent
+    index_dir = root / "backend" / "artifacts" / "msmarco_xi" / "v001"
     
-    # 1. index exists
-    dense_index_path = base_path / "dense.index"
-    if not dense_index_path.exists():
-        logger.error(f"Dense index not found at {dense_index_path}")
-        return False
-        
-    # 2. metadata exists
-    metadata_dir = base_path / "metadata"
-    if not metadata_dir.exists() or not any(metadata_dir.iterdir()):
-        logger.error(f"Metadata directory is missing or empty at {metadata_dir}")
-        return False
-
-    # 3. manifest exists
-    manifest_path = base_path / "manifest.json"
+    # 1. Load manifest
+    manifest_path = index_dir / "manifest.json"
     if not manifest_path.exists():
-        logger.error(f"Manifest not found at {manifest_path}")
-        return False
-        
-    try:
-        with open(manifest_path, 'r') as f:
-            manifest = json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to load manifest: {e}")
-        return False
-
-    # (In a real implementation we would load FAISS and check vector count == manifest['chunk_count'])
-    # (And BM25 count == manifest['chunk_count'])
-    
-    # 4. manifest matches index
-    if "chunk_count" not in manifest:
-        logger.warning("Manifest is missing 'chunk_count', cannot fully validate.")
-        
-    # 5. random retrieval test
-    # (In a real implementation we would do a dummy query against the index to ensure it's functional)
-    logger.info("Random retrieval test simulated: PASS")
-    
-    logger.info("Index validation: PASS -> READY")
-    return True
-
-if __name__ == "__main__":
-    artifacts_path = os.getenv("RAG_ARTIFACTS_PATH", "./artifacts/msmarco_xi")
-    version = os.getenv("RAG_INDEX_VERSION", "v001")
-    
-    logger.info(f"Validating index {version} at {artifacts_path}...")
-    
-    # Create mock manifest for testing purposes if not exists (for this skeleton)
-    mock_manifest = Path(artifacts_path) / version / "manifest.json"
-    if not mock_manifest.exists():
-        mock_manifest.parent.mkdir(parents=True, exist_ok=True)
-        with open(mock_manifest, 'w') as f:
-            json.dump({"chunk_count": 0, "dataset": "msmarco"}, f)
-            
-    # Create mock dense index
-    mock_dense = Path(artifacts_path) / version / "dense.index"
-    if not mock_dense.exists():
-        mock_dense.touch()
-        
-    success = validate_index(artifacts_path, version)
-    
-    if not success:
-        logger.error("Index validation: FAIL -> NOT READY")
+        print(f"Error: Manifest not found at {manifest_path}")
         sys.exit(1)
         
-    sys.exit(0)
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+        
+    expected_chunks = manifest.get("chunks")
+    print(f"Manifest expects {expected_chunks} chunks.")
+    
+    # 2. Check metadata
+    chunks_path = index_dir / "chunks.json"
+    with open(chunks_path, "r", encoding="utf-8") as f:
+        chunks = json.load(f)
+    metadata_count = len(chunks)
+    print(f"Metadata (chunks.json) count: {metadata_count}")
+    
+    # 3. Check FAISS
+    faiss_path = index_dir / "dense.index"
+    index = faiss.read_index(str(faiss_path))
+    dense_count = index.ntotal
+    print(f"FAISS (dense.index) ntotal: {dense_count}")
+    
+    # 4. Check Sparse
+    bm25_path = index_dir / "bm25.pkl"
+    with open(bm25_path, "rb") as f:
+        bm25 = pickle.load(f)
+    
+    # For rank_bm25, doc_len stores the length of each document.
+    sparse_count = len(bm25.doc_len)
+    print(f"Sparse (bm25.pkl) count: {sparse_count}")
+    
+    # 5. Assertions
+    assert expected_chunks == metadata_count, "Metadata count mismatch!"
+    assert expected_chunks == dense_count, "FAISS count mismatch!"
+    assert expected_chunks == sparse_count, "Sparse BM25 count mismatch!"
+    
+    # 6. Verify Embedding compatibility with our online settings
+    # For VaaniRAG's current setup, the embedder handles TF-IDF SVD
+    embedder_path = index_dir / "embedder.pkl"
+    with open(embedder_path, "rb") as f:
+        import backend.rag.retrieval.embeddings as hhg_rag
+        import types
+        if 'rag' not in sys.modules:
+            sys.modules['rag'] = types.ModuleType('rag')
+        if 'rag.embeddings' not in sys.modules:
+            sys.modules['rag.embeddings'] = types.ModuleType('rag.embeddings')
+        sys.modules['rag.embeddings.encoder'] = hhg_rag
+        
+        embedder = pickle.load(f)
+    
+    # In TfidfSvdEmbedder, the svd component holds the n_components which is the dimension
+    dim = embedder.svd.n_components
+    expected_dim = manifest.get("embedding_dimension")
+    print(f"Embedding model dimension: {dim} (Expected: {expected_dim})")
+    assert dim == expected_dim, f"Embedding dimension mismatch: {dim} vs {expected_dim}"
+    
+    # Validate missing texts
+    missing_texts = sum(1 for c in chunks if not c.get("text"))
+    print(f"Chunks with missing text: {missing_texts}")
+    assert missing_texts == 0, "Found chunks with empty text!"
+    
+    print("✅ Index validation passed!")
+    
+if __name__ == "__main__":
+    main()

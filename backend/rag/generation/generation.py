@@ -85,7 +85,7 @@ class GroqGenerator(BaseGenerator):
     """Real LLM backend using the Groq API (extremely low latency). Requires
     GROQ_API_KEY to be set in the environment."""
 
-    def __init__(self, model: str = "llama-3.1-8b-instant"):
+    def __init__(self, model: str = "groq/compound-mini"):
         self.model = model
 
     def generate(self, query: str, context_chunks: list[dict[str, Any]]) -> str:
