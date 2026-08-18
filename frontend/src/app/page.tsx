@@ -235,7 +235,8 @@ export default function MainInterface() {
 
       let ws: WebSocket;
       try {
-        ws = new WebSocket("ws://localhost:8000/ws/voice");
+        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws/voice";
+        ws = new WebSocket(wsUrl);
       } catch (err) {
         clearTimeout(timeout);
         reject(err);
@@ -556,7 +557,8 @@ export default function MainInterface() {
     setStatus("processing");
 
     try {
-      const res = await fetch("http://localhost:8000/query", {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      const res = await fetch(`${backendUrl}/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: text, language: "en" }),
