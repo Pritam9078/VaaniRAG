@@ -1,0 +1,11 @@
+{
+  "dataset": "ai4bharat/MSMARCO-XI",
+  "dataset_version": "default",
+  "split": "validation",
+  "number_of_queries": 100,
+  "embedding_model": "tfidf_svd",
+  "reranker_model": "JinaReranker (ONNX)",
+  "index_version": "v001",
+  "chunking_version": "multi_strategy_v001",
+  "top_k": 5
+}

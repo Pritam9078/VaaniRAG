@@ -12,7 +12,7 @@ EVAL_DIR = ROOT.parent / "evaluation"
 class AdaptivePipeline:
     def __init__(self):
         self.index = HybridIndex(str(INDEX_DIR))
-        self.weights = {"w1": 0.0, "w2": 0.5, "w3": 0.5, "threshold": 0.5}
+        self.weights = {"w1": 0.2, "w2": 0.4, "w3": 0.4, "threshold": 0.35}
         try:
             with open(EVAL_DIR / "results" / "confidence_weights.json", "r") as f:
                 self.weights = json.load(f)
@@ -21,11 +21,8 @@ class AdaptivePipeline:
             
     def run(self, query: str, top_n: int = 10, language: str | None = None):
         # Parallel Retrieval (Phase 3)
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            f1 = executor.submit(self.index.dense_search, query, 20)
-            f2 = executor.submit(self.index.bm25_search, query, 20)
-            dense = f1.result()
-            sparse = f2.result()
+        dense = self.index.dense_search(query, 20)
+        sparse = self.index.bm25_search(query, 20)
             
         # RRF Fusion
         rrf_k = 60

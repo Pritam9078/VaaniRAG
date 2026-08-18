@@ -93,29 +93,36 @@ def get_reranker() -> JinaReranker:
 
 
 def rerank(query: str, candidates: list[dict[str, Any]],
-           top_n: int = 5, dedup_threshold: float = 0.85) -> list[dict[str, Any]]:
+           top_n: int = 5, dedup_threshold: float = 0.85, adaptive: bool = True) -> list[dict[str, Any]]:
     
+    # Adaptive Confidence Gate
+    is_confident = False
+    if adaptive and candidates:
+        top_cand = candidates[0]
+        if top_cand.get("dense_rank") == 0 and top_cand.get("sparse_rank") == 0:
+            is_confident = True
+
     reranker = get_reranker()
-    if reranker.is_loaded():
+    if reranker.is_loaded() and not is_confident:
         scores = reranker.score(query, [c["text"] for c in candidates])
         import math
         def calibrated_sigmoid(x):
-            # Jina logits for relevant docs can be around -2.0 to +2.0. 
-            # We add +4.0 so a logit of -2.0 maps to ~0.88, easily passing the 0.20 guardrail floor.
-            # A completely irrelevant doc with a logit of -6.0 maps to ~0.11, failing the guardrail.
             return 1 / (1 + math.exp(-(x + 4.0))) if x > -20 else 0.0
             
         scored = [{**c, "relevance_score": float(calibrated_sigmoid(s))} for c, s in zip(candidates, scores)]
         scored.sort(key=lambda x: -x["relevance_score"])
     else:
-        # Fallback to lexical
-        q_tokens = _tokens(query)
-        scored = []
-        for c in candidates:
-            lexical = _jaccard(q_tokens, _tokens(c["text"]))
-            combined = 0.5 * c.get("rrf_score", 0.0) + 0.5 * lexical
-            scored.append({**c, "relevance_score": combined})
-        scored.sort(key=lambda x: -x["relevance_score"])
+        # Fallback to lexical or use RRF directly if confident
+        if is_confident:
+            scored = [{**c, "relevance_score": c.get("rrf_score", 0.0)} for c in candidates]
+        else:
+            q_tokens = _tokens(query)
+            scored = []
+            for c in candidates:
+                lexical = _jaccard(q_tokens, _tokens(c["text"]))
+                combined = 0.5 * c.get("rrf_score", 0.0) + 0.5 * lexical
+                scored.append({**c, "relevance_score": combined})
+            scored.sort(key=lambda x: -x["relevance_score"])
 
     # Drop near-duplicate chunks (redundancy filter)
     final: list[dict[str, Any]] = []

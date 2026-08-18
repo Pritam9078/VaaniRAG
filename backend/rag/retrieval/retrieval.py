@@ -141,10 +141,13 @@ class HybridIndex:
         dense = self.dense_search(query, k_each)
         sparse = self.bm25_search(query, k_each)
 
+        dense_dict = {idx: rank for rank, (idx, _score) in enumerate(dense)}
+        sparse_dict = {idx: rank for rank, (idx, _score) in enumerate(sparse)}
+        
         rrf_scores: dict[int, float] = {}
-        for rank, (idx, _score) in enumerate(dense):
+        for idx, rank in dense_dict.items():
             rrf_scores[idx] = rrf_scores.get(idx, 0.0) + 1.0 / (rank + rrf_k)
-        for rank, (idx, _score) in enumerate(sparse):
+        for idx, rank in sparse_dict.items():
             rrf_scores[idx] = rrf_scores.get(idx, 0.0) + 1.0 / (rank + rrf_k)
 
         ranked = sorted(rrf_scores.items(), key=lambda x: -x[1])
@@ -154,7 +157,16 @@ class HybridIndex:
             chunk = self.chunks[idx]
             if language and chunk["language"] != language:
                 continue  # metadata-aware filtering
-            results.append({**chunk, "rrf_score": score})
+            
+            d_rank = dense_dict.get(idx, -1)
+            s_rank = sparse_dict.get(idx, -1)
+            
+            results.append({
+                **chunk, 
+                "rrf_score": score,
+                "dense_rank": d_rank,
+                "sparse_rank": s_rank
+            })
             if len(results) >= top_n:
                 break
         return results

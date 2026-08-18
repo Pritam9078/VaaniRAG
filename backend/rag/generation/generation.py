@@ -2,20 +2,6 @@
 generation.py
 -------------
 Pluggable answer-generation backend.
-
-Production recommendation: call a fast hosted or local LLM (see
-`AnthropicGenerator` / `OpenAIGenerator` stubs below) with a grounded
-system prompt that forces citation of source chunk indices, e.g.:
-
-    "Answer ONLY using the numbered sources below. Cite sources
-     like [1], [2]. If the answer isn't in the sources, say so."
-
-This sandbox has no injected API credentials, so the default backend
-(`ExtractiveGenerator`) is a dependency-free, template-based composer
-that builds a cited answer directly from the top-ranked chunks. It's
-deterministic and fast (good for latency benchmarking) and keeps the
-end-to-end pipeline runnable without any external API key. Swapping in
-a real LLM is a one-line change (`GENERATOR_BACKEND` env var / config).
 """
 
 from __future__ import annotations
@@ -23,6 +9,7 @@ from __future__ import annotations
 import os
 import re
 from typing import Any
+import time
 
 
 class BaseGenerator:
@@ -38,8 +25,6 @@ class ExtractiveGenerator(BaseGenerator):
         if not context_chunks:
             return "I don't have enough information to answer that."
 
-        # Pick the 1-2 sentences from the top chunk most lexically similar
-        # to the query as the core answer, then attach citations.
         top = context_chunks[0]
         sentences = re.split(r"(?<=[.!?।])\s+", top["text"])
         q_tokens = set(re.findall(r"[A-Za-z\u0900-\u097F]{2,}", query.lower()))
@@ -56,14 +41,11 @@ class ExtractiveGenerator(BaseGenerator):
 
 
 class AnthropicGenerator(BaseGenerator):
-    """Real LLM backend using the Anthropic Messages API. Requires
-    ANTHROPIC_API_KEY to be set in the environment. Not used by default."""
-
     def __init__(self, model: str = "claude-sonnet-5"):
         self.model = model
 
     def generate(self, query: str, context_chunks: list[dict[str, Any]]) -> str:
-        import anthropic  # noqa: local import, optional dependency
+        import anthropic
 
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         sources = "\n".join(f"[{i+1}] {c['text']}" for i, c in enumerate(context_chunks))
@@ -82,30 +64,98 @@ class AnthropicGenerator(BaseGenerator):
 
 
 class GroqGenerator(BaseGenerator):
-    """Real LLM backend using the Groq API (extremely low latency). Requires
-    GROQ_API_KEY to be set in the environment."""
-
-    def __init__(self, model: str = "groq/compound-mini"):
+    def __init__(self, model: str = "allam-2-7b", max_tokens: int = 6):
         self.model = model
+        self.max_tokens = max_tokens
+        self.last_telemetry = {}
+        self.client = None
+        self.http_client = None
+
+    def _init_client(self):
+        if self.client is None:
+            from groq import Groq
+            import httpx
+            
+            # Use persistent HTTPX client with connection pooling
+            self.http_client = httpx.Client(
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+                timeout=httpx.Timeout(15.0)
+            )
+            self.client = Groq(
+                api_key=os.environ.get("GROQ_API_KEY"),
+                http_client=self.http_client
+            )
 
     def generate(self, query: str, context_chunks: list[dict[str, Any]]) -> str:
-        from groq import Groq
-
-        client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+        t_start = time.perf_counter()
+        
+        t_setup_start = time.perf_counter()
+        self._init_client()
+        t_setup_end = time.perf_counter()
+        
+        self.last_telemetry["client_prepare_ms"] = (t_setup_end - t_setup_start) * 1000
+        
         sources = "\n".join(f"[{i+1}] {c['text']}" for i, c in enumerate(context_chunks))
-        system = (
-            "Answer using ONLY the sources below. Cite like [1]. ONE short sentence."
-        )
-        msg = client.chat.completions.create(
-            model=self.model,
-            max_tokens=40,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": f"Sources:\n{sources}\n\nQuestion: {query}"}
-            ],
-            temperature=0.0
-        )
-        content = msg.choices[0].message.content
+        system = "Answer using ONLY the sources below. Cite like [1]. ONE short sentence."
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": f"Sources:\n{sources}\n\nQuestion: {query}"}
+        ]
+        
+        t_prompt_build_end = time.perf_counter()
+        self.last_telemetry["prompt_build_ms"] = (t_prompt_build_end - t_setup_end) * 1000
+        
+        retries = 0
+        while True:
+            try:
+                t_req_send = time.perf_counter()
+                
+                # Streaming call
+                msg_stream = self.client.chat.completions.create(
+                    model=self.model,
+                    max_tokens=getattr(self, "max_tokens", 64),
+                    messages=messages,
+                    temperature=0.0,
+                    stream=True
+                )
+                
+                content_chunks = []
+                ttft_recorded = False
+                t_first_token = 0
+                
+                for chunk in msg_stream:
+                    if not ttft_recorded:
+                        t_first_token = time.perf_counter()
+                        # Strict TTFT measurement (first token minus request send)
+                        self.last_telemetry["TTFT_ms"] = (t_first_token - t_req_send) * 1000
+                        ttft_recorded = True
+                        
+                    delta = chunk.choices[0].delta.content if chunk.choices else None
+                    if delta:
+                        content_chunks.append(delta)
+                        
+                t_req_end = time.perf_counter()
+                content = "".join(content_chunks)
+                self.last_telemetry["stream_generation_ms"] = (t_req_end - t_first_token) * 1000
+                self.last_telemetry["model_generation_ms"] = (t_req_end - t_req_send) * 1000
+                break
+                
+            except Exception as e:
+                if "rate limit" in str(e).lower() or "429" in str(e):
+                    retries += 1
+                    time.sleep(1)
+                else:
+                    self.last_telemetry["error_type"] = type(e).__name__
+                    raise e
+                    
+        self.last_telemetry["retry_count"] = retries
+        
+        t_parse_start = time.perf_counter()
+        self.last_telemetry["output_tokens"] = len(content) // 4
+        t_parse_end = time.perf_counter()
+        self.last_telemetry["response_parse_ms"] = (t_parse_end - t_parse_start) * 1000
+        self.last_telemetry["generation_total_ms"] = (t_parse_end - t_start) * 1000
+        
         return str(content) if content else ""
 
 
