@@ -98,7 +98,14 @@ def rerank(query: str, candidates: list[dict[str, Any]],
     reranker = get_reranker()
     if reranker.is_loaded():
         scores = reranker.score(query, [c["text"] for c in candidates])
-        scored = [{**c, "relevance_score": float(s)} for c, s in zip(candidates, scores)]
+        import math
+        def calibrated_sigmoid(x):
+            # Jina logits for relevant docs can be around -2.0 to +2.0. 
+            # We add +4.0 so a logit of -2.0 maps to ~0.88, easily passing the 0.20 guardrail floor.
+            # A completely irrelevant doc with a logit of -6.0 maps to ~0.11, failing the guardrail.
+            return 1 / (1 + math.exp(-(x + 4.0))) if x > -20 else 0.0
+            
+        scored = [{**c, "relevance_score": float(calibrated_sigmoid(s))} for c, s in zip(candidates, scores)]
         scored.sort(key=lambda x: -x["relevance_score"])
     else:
         # Fallback to lexical

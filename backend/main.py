@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
+import os
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -52,15 +53,15 @@ load_dotenv(APP_DIR / ".env")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _index
+    global _pipeline
     if not (INDEX_DIR / "dense.index").exists():
         logger.warning(
             "No index found at %s -- run `python -m backend.scripts.build_index` first.",
             INDEX_DIR,
         )
     else:
-        _index = HybridIndex(str(INDEX_DIR))
-        logger.info("Loaded index with %d chunks.", len(_index.chunks))
+        _pipeline = AdaptivePipeline()
+        logger.info("Loaded adaptive pipeline with %d chunks.", len(_pipeline.index.chunks))
     yield
 
 app = FastAPI(title="VaaniRAG", version="0.1.0", lifespan=lifespan)
@@ -68,8 +69,10 @@ app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
+from backend.rag.adaptive_pipeline import AdaptivePipeline
+
 # --- Lazily-initialized global components (loaded once at startup) ------
-_index: HybridIndex | None = None
+_pipeline: AdaptivePipeline | None = None
 _generator = get_generator()
 _stt = get_stt()
 
@@ -107,7 +110,7 @@ def with_retry(fn: Callable[[], T], attempts: int = 3, label: str = "", backoff_
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "index_loaded": _index is not None}
+    return {"status": "ok", "pipeline_loaded": _pipeline is not None}
 
 
 # --------------------------------------------------------------------------
@@ -132,9 +135,9 @@ def run_pipeline(transcript: str, stt_ms: float, language: str | None = None) ->
             ),
         )
 
-    idx = _index
-    if idx is None:
-        raise HTTPException(status_code=503, detail="Index not loaded. Run build_index first.")
+    pipeline = _pipeline
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="Pipeline not loaded. Run build_index first.")
 
     import re
     search_query = transcript
@@ -151,12 +154,12 @@ def run_pipeline(transcript: str, stt_ms: float, language: str | None = None) ->
         except Exception as e:
             print(f"Query translation failed: {e}")
 
-    # ---- Stage: hybrid retrieval (dense + BM25 + RRF) ----
+    # ---- Stage: adaptive hybrid retrieval (dense + BM25 + RRF) + rerank ----
     r0 = time.perf_counter()
     try:
-        candidates = with_retry(
-            lambda: idx.hybrid_search(search_query, language=language, top_n=3),
-            label="retrieval",
+        top_chunks, jina_used = with_retry(
+            lambda: _pipeline.run(search_query, top_n=2, language=language),
+            label="retrieval_adaptive",
         )
     except Exception as e:  # noqa: BLE001
         total_ms = (time.perf_counter() - t_start) * 1000 + stt_ms
@@ -171,12 +174,10 @@ def run_pipeline(transcript: str, stt_ms: float, language: str | None = None) ->
             ),
         )
         
+    # Since AdaptivePipeline merges retrieval and reranking, we'll assign the whole time to retrieval for simplicity,
+    # or split it logically. Let's just track it as retrieval_ms.
     retrieval_ms = (time.perf_counter() - r0) * 1000
-
-    # ---- Stage: rerank ----
-    rr0 = time.perf_counter()
-    top_chunks = rerank_chunks(search_query, candidates, top_n=2)
-    rerank_ms = (time.perf_counter() - rr0) * 1000
+    rerank_ms = 0.0
 
     # ---- Stage: retrieval guardrail (relevance threshold) ----
     g1 = time.perf_counter()
@@ -233,9 +234,9 @@ def run_pipeline(transcript: str, stt_ms: float, language: str | None = None) ->
             transcript=transcript,
             refusal_reason=output_check.reason,
             refusal_stage=output_check.stage,
-            sources=[SourceChunk(**{k: c[k] for k in
+            sources=[SourceChunk(**{k: c.get(k, "unknown") for k in
                      ("chunk_id", "doc_id", "text", "chunk_type", "language")},
-                     relevance_score=c["relevance_score"]) for c in top_chunks],
+                     relevance_score=c.get("relevance_score", 0.0)) for c in top_chunks],
             grounding_score=ground_score,
             latencies=StageLatencies(
                 stt_ms=stt_ms, retrieval_ms=retrieval_ms, rerank_ms=rerank_ms,
@@ -247,9 +248,9 @@ def run_pipeline(transcript: str, stt_ms: float, language: str | None = None) ->
         status="answered",
         transcript=transcript,
         answer=answer,
-        sources=[SourceChunk(**{k: c[k] for k in
+        sources=[SourceChunk(**{k: c.get(k, "unknown") for k in
                  ("chunk_id", "doc_id", "text", "chunk_type", "language")},
-                 relevance_score=c["relevance_score"]) for c in top_chunks],
+                 relevance_score=c.get("relevance_score", 0.0)) for c in top_chunks],
         grounding_score=ground_score,
         latencies=StageLatencies(
             stt_ms=stt_ms, retrieval_ms=retrieval_ms, rerank_ms=rerank_ms,
@@ -274,9 +275,8 @@ async def websocket_voice_endpoint(websocket: WebSocket):
         async with SarvamStream(api_key) as stream:
             
             # Start receiving STT events in background
+            state = {"text": None, "ms": 0.0}
             async def receive_stt():
-                final_transcript = None
-                stt_latency = 0.0
                 async for event in stream.receive():
                     if isinstance(event, Transcript):
                         await websocket.send_json({
@@ -284,10 +284,10 @@ async def websocket_voice_endpoint(websocket: WebSocket):
                             "text": event.text,
                             "is_final": event.is_final
                         })
+                        state["text"] = event.text
+                        state["ms"] = event.elapsed_ms
                         if event.is_final:
-                            final_transcript = event.text
-                            stt_latency = event.elapsed_ms
-                return final_transcript, stt_latency
+                            break
 
             receive_task = asyncio.create_task(receive_stt())
 
@@ -299,7 +299,13 @@ async def websocket_voice_endpoint(websocket: WebSocket):
                     break
                 await stream.send_audio(data)
 
-            transcript, stt_ms = await receive_task
+            try:
+                await asyncio.wait_for(receive_task, timeout=1.5)
+            except asyncio.TimeoutError:
+                pass
+            
+            transcript = state["text"]
+            stt_ms = state["ms"]
             
             if not transcript:
                 await websocket.send_json({"type": "error", "message": "No transcript received"})
@@ -316,15 +322,11 @@ async def websocket_voice_endpoint(websocket: WebSocket):
                 await websocket.send_json({"type": "refused", "reason": input_check.reason, "stage": input_check.stage})
                 return
 
-            # Retrieval
+            # Retrieval & Rerank (Adaptive)
             r0 = time.perf_counter()
-            candidates = _index.hybrid_search(transcript, top_n=3)
+            top_chunks, jina_used = _pipeline.run(transcript, top_n=2)
             retrieval_ms = (time.perf_counter() - r0) * 1000
-
-            # Rerank
-            rr0 = time.perf_counter()
-            top_chunks = rerank_chunks(transcript, candidates, top_n=2)
-            rerank_ms = (time.perf_counter() - rr0) * 1000
+            rerank_ms = 0.0
 
             # Guardrail 4
             g1 = time.perf_counter()

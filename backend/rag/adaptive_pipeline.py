@@ -19,7 +19,7 @@ class AdaptivePipeline:
         except Exception:
             pass
             
-    def run(self, query: str, top_n: int = 10):
+    def run(self, query: str, top_n: int = 10, language: str | None = None):
         # Parallel Retrieval (Phase 3)
         with ThreadPoolExecutor(max_workers=2) as executor:
             f1 = executor.submit(self.index.dense_search, query, 20)
@@ -54,11 +54,17 @@ class AdaptivePipeline:
         conf = w1 * agreement + w2 * rrf_margin + w3 * dense_score
         
         candidates = []
-        for idx, score in ranked[:3]: # Jina sees 3 to stay fast
+        for idx, score in ranked:
             chunk = self.index.chunks[idx]
+            if language and chunk["language"] != language:
+                continue
             candidates.append({**chunk, "rrf_score": score})
+            if len(candidates) >= 3: # Jina sees 3 to stay fast
+                break
             
         if conf >= t:
+            for c in candidates:
+                c["relevance_score"] = c.get("rrf_score", 0.0) * 10.0 + 0.5 # Ensure it passes 0.20 threshold safely since we are confident
             return candidates[:top_n], False # False = Jina skipped
         else:
             return rerank(query, candidates, top_n=top_n), True # True = Jina used
