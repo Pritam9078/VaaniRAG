@@ -1,0 +1,11 @@
+{
+  "num_docs": 10,
+  "num_chunks": 187,
+  "chunk_type_counts": {
+    "adaptive": 54,
+    "fixed": 32,
+    "semantic": 66,
+    "sentence": 35
+  },
+  "embedding_dim": 128
+}

@@ -64,97 +64,145 @@ class AnthropicGenerator(BaseGenerator):
 
 
 class GroqGenerator(BaseGenerator):
-    def __init__(self, model: str = "allam-2-7b", max_tokens: int = 6):
+    def __init__(self, model: str = "allam-2-7b", max_tokens: int = 32):
         self.model = model
         self.max_tokens = max_tokens
         self.last_telemetry = {}
-        self.client = None
-        self.http_client = None
+        self._http_client = None
 
     def _init_client(self):
-        if self.client is None:
-            from groq import Groq
+        if self._http_client is None:
             import httpx
-            
-            # Use persistent HTTPX client with connection pooling
-            self.http_client = httpx.Client(
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-                timeout=httpx.Timeout(15.0)
-            )
-            self.client = Groq(
-                api_key=os.environ.get("GROQ_API_KEY"),
-                http_client=self.http_client
+            # Phase 6: Persistent connection pool
+            self._http_client = httpx.Client(
+                limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+                timeout=httpx.Timeout(20.0),
+                headers={
+                    "Authorization": f"Bearer {os.environ.get('GROQ_API_KEY')}",
+                    "Content-Type": "application/json"
+                }
             )
 
     def generate(self, query: str, context_chunks: list[dict[str, Any]]) -> str:
+        import uuid
+        import json
         t_start = time.perf_counter()
+        
+        request_id = str(uuid.uuid4())
         
         t_setup_start = time.perf_counter()
         self._init_client()
         t_setup_end = time.perf_counter()
         
-        self.last_telemetry["client_prepare_ms"] = (t_setup_end - t_setup_start) * 1000
-        
         sources = "\n".join(f"[{i+1}] {c['text']}" for i, c in enumerate(context_chunks))
         system = "Answer using ONLY the sources below. Cite like [1]. ONE short sentence."
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": f"Sources:\n{sources}\n\nQuestion: {query}"}
-        ]
         
-        t_prompt_build_end = time.perf_counter()
-        self.last_telemetry["prompt_build_ms"] = (t_prompt_build_end - t_setup_end) * 1000
+        payload = {
+            "model": self.model,
+            "max_tokens": getattr(self, "max_tokens", 32),
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": f"Sources:\n{sources}\n\nQuestion: {query}"}
+            ],
+            "temperature": 0.0,
+            "stream": True
+        }
         
         retries = 0
-        while True:
-            try:
-                t_req_send = time.perf_counter()
-                
-                # Streaming call
-                msg_stream = self.client.chat.completions.create(
-                    model=self.model,
-                    max_tokens=getattr(self, "max_tokens", 64),
-                    messages=messages,
-                    temperature=0.0,
-                    stream=True
-                )
-                
-                content_chunks = []
-                ttft_recorded = False
-                t_first_token = 0
-                
-                for chunk in msg_stream:
-                    if not ttft_recorded:
-                        t_first_token = time.perf_counter()
-                        # Strict TTFT measurement (first token minus request send)
-                        self.last_telemetry["TTFT_ms"] = (t_first_token - t_req_send) * 1000
-                        ttft_recorded = True
-                        
-                    delta = chunk.choices[0].delta.content if chunk.choices else None
-                    if delta:
-                        content_chunks.append(delta)
-                        
-                t_req_end = time.perf_counter()
-                content = "".join(content_chunks)
-                self.last_telemetry["stream_generation_ms"] = (t_req_end - t_first_token) * 1000
-                self.last_telemetry["model_generation_ms"] = (t_req_end - t_req_send) * 1000
-                break
-                
-            except Exception as e:
-                if "rate limit" in str(e).lower() or "429" in str(e):
-                    retries += 1
-                    time.sleep(1)
-                else:
-                    self.last_telemetry["error_type"] = type(e).__name__
-                    raise e
-                    
-        self.last_telemetry["retry_count"] = retries
+        retry_total_delay_ms = 0
+        content_chunks = []
         
-        t_parse_start = time.perf_counter()
-        self.last_telemetry["output_tokens"] = len(content) // 4
+        # Tracking variables
+        t_conn_acquired = 0
+        t_req_sent = 0
+        t_first_token = 0
+        t_req_end = 0
+        status_code = 0
+        rate_limit_headers = {}
+        exception_name = None
+        
+        while retries <= 1: # Bounded retry policy (Phase 7)
+            try:
+                t_req_prep = time.perf_counter()
+                
+                # We use stream() to measure TTFT manually
+                with self._http_client.stream("POST", "https://api.groq.com/openai/v1/chat/completions", json=payload) as response:
+                    t_conn_acquired = time.perf_counter()
+                    t_req_sent = t_conn_acquired # Approximated as the moment stream yields
+                    
+                    status_code = response.status_code
+                    
+                    # Capture headers for Phase 3
+                    for k, v in response.headers.items():
+                        if k.lower().startswith("x-ratelimit"):
+                            rate_limit_headers[k] = v
+                    
+                    if status_code != 200:
+                        error_text = response.read().decode("utf-8")
+                        if status_code in (429, 502, 503):
+                            raise Exception(f"HTTP {status_code}: {error_text}")
+                        else:
+                            raise Exception(f"HTTP {status_code}: {error_text}")
+                    
+                    ttft_recorded = False
+                    for line in response.iter_lines():
+                        if line.startswith("data: "):
+                            if line == "data: [DONE]":
+                                break
+                            
+                            if not ttft_recorded:
+                                t_first_token = time.perf_counter()
+                                ttft_recorded = True
+                                
+                            data_str = line[6:]
+                            try:
+                                chunk = json.loads(data_str)
+                                delta = chunk["choices"][0].get("delta", {}).get("content", "")
+                                if delta:
+                                    content_chunks.append(delta)
+                            except:
+                                pass
+                                
+                    t_req_end = time.perf_counter()
+                    break # Success!
+                    
+            except Exception as e:
+                exception_name = type(e).__name__
+                if "429" in str(e) or "503" in str(e) or "rate limit" in str(e).lower():
+                    retries += 1
+                    if retries <= 1:
+                        delay = 0.5
+                        time.sleep(delay)
+                        retry_total_delay_ms += (delay * 1000)
+                    else:
+                        break # Exceeded bounds
+                else:
+                    break # Don't retry on non-transient errors
+                    
+        content = "".join(content_chunks)
         t_parse_end = time.perf_counter()
-        self.last_telemetry["response_parse_ms"] = (t_parse_end - t_parse_start) * 1000
-        self.last_telemetry["generation_total_ms"] = (t_parse_end - t_start) * 1000
+        
+        # Telemetry payload matching Phase 1/2 requirements
+        self.last_telemetry = {
+            "request_id": request_id,
+            "query_id": hash(query) % 1000000,
+            "request_start": t_start,
+            "connection_acquisition_ms": (t_conn_acquired - t_req_prep) * 1000 if t_conn_acquired else 0,
+            "request_send_ms": 0, # Included in conn acquisition
+            "TTFT_ms": (t_first_token - t_req_sent) * 1000 if t_first_token else 0,
+            "stream_generation_ms": (t_req_end - t_first_token) * 1000 if t_first_token else 0,
+            "response_parse_ms": (t_parse_end - t_req_end) * 1000 if t_req_end else 0,
+            "generation_total_ms": (t_parse_end - t_start) * 1000,
+            "model": self.model,
+            "input_tokens": len(query + sources) // 4,
+            "output_tokens": len(content) // 4,
+            "max_tokens": self.max_tokens,
+            "status_code": status_code,
+            "retry_count": retries,
+            "retry_delay_ms": retry_total_delay_ms,
+            "exception": exception_name,
+            "rate_limit_headers": rate_limit_headers
+        }
         
         return str(content) if content else ""
 
