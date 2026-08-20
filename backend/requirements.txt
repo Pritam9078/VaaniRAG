@@ -18,3 +18,4 @@ onnxruntime
 huggingface-hub
 tokenizers
 sentence-transformers
+datasets
