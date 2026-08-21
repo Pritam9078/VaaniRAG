@@ -696,12 +696,8 @@ export default function MainInterface() {
       >
         {/* Header */}
         <header className="mt-6 space-y-2 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#232840] bg-[#10131f]/70 px-3 py-1 text-[11px] font-data uppercase tracking-widest text-[#7d84a3] backdrop-blur">
-            <Radio className="h-3 w-3 text-[#45e8c4]" />
-            {demoMode ? "Demo mode — no backend detected" : "Live pipeline connected"}
-          </div>
           <h1 className="font-display bg-gradient-to-r from-[#45e8c4] via-[#8fe9d4] to-[#9d8cff] bg-clip-text text-5xl font-bold tracking-tight text-transparent">
-            VaaniRAG
+            Vaani
           </h1>
           <p className="font-body text-[#7d84a3]">
             Voice-native retrieval, answered before you finish exhaling.
@@ -870,12 +866,14 @@ export default function MainInterface() {
                     </h2>
 
                     <div className="space-y-6">
-                      <div>
-                        <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#45e8c4]">
-                          <Zap className="h-4 w-4" /> Quick Summary
-                        </h3>
-                        <p className="font-body text-[#eef0f8]">{tier1Answer}</p>
-                      </div>
+                      {tier1Answer && (
+                        <div>
+                          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#45e8c4]">
+                            <Zap className="h-4 w-4" /> Quick Summary
+                          </h3>
+                          <p className="font-body text-[#eef0f8]">{tier1Answer}</p>
+                        </div>
+                      )}
 
                       <div className="border-t border-[#232840] pt-6">
                         <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#9d8cff]">
