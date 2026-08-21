@@ -288,8 +288,15 @@ export default function MainInterface() {
   const handleWebSocketMessage = (msg: WSMessage) => {
     switch (msg.type) {
       case "transcript_partial":
-        setTranscript(msg.text || "");
-        if (msg.is_final) setStatus("processing");
+        const newText = msg.text || "";
+        setTranscript(newText);
+        if (msg.is_final) {
+          if (newText.trim()) {
+            setStatus("processing");
+          } else {
+            setStatus("idle");
+          }
+        }
         break;
       case "tier1":
         setTier1Answer(msg.answer || "");

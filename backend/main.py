@@ -307,8 +307,9 @@ async def websocket_voice_endpoint(websocket: WebSocket):
             transcript = state["text"]
             stt_ms = state["ms"]
             
-            if not transcript:
+            if not transcript or not transcript.strip():
                 await websocket.send_json({"type": "error", "message": "No transcript received"})
+                await asyncio.sleep(0.05)
                 return
 
             t_start = time.perf_counter()
@@ -320,6 +321,7 @@ async def websocket_voice_endpoint(websocket: WebSocket):
 
             if not input_check.allowed:
                 await websocket.send_json({"type": "refused", "reason": input_check.reason, "stage": input_check.stage})
+                await asyncio.sleep(0.05)
                 return
 
             import re
@@ -347,6 +349,7 @@ async def websocket_voice_endpoint(websocket: WebSocket):
             guardrail_ms += (time.perf_counter() - g1) * 1000
             if not ret_check.allowed:
                 await websocket.send_json({"type": "refused", "reason": ret_check.reason, "stage": ret_check.stage, "score": top_chunks[0].get("relevance_score", 0)})
+                await asyncio.sleep(0.05)
                 return
 
             # Tier 1: Extractive
