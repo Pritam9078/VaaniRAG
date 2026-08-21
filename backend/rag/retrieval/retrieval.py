@@ -64,7 +64,7 @@ class FastBM25:
 class HybridIndex:
     def __init__(self, index_dir: str):
         self.index_dir = Path(index_dir)
-        self.faiss_index = faiss.read_index(str(self.index_dir / "dense.index"))
+        self.faiss_index = faiss.read_index(str(self.index_dir / "faiss.index"))
         
         # Load fast inverted BM25 if it exists, else load old rank_bm25
         fast_bm25_path = self.index_dir / "inverted_bm25.pkl"

@@ -6,7 +6,7 @@ from backend.rag.reranking.rerank import rerank
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = Path(__file__).resolve().parent.parent
-INDEX_DIR = ROOT / "artifacts" / "msmarco_xi" / "v001"
+INDEX_DIR = ROOT / "data" / "index"
 EVAL_DIR = ROOT.parent / "evaluation"
 
 class AdaptivePipeline:
