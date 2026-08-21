@@ -119,8 +119,10 @@ def rerank(query: str, candidates: list[dict[str, Any]],
             q_tokens = _tokens(query)
             scored = []
             for c in candidates:
-                lexical = _jaccard(q_tokens, _tokens(c["text"]))
-                combined = 0.5 * c.get("rrf_score", 0.0) + 0.5 * lexical
+                c_tokens = _tokens(c["text"])
+                lexical = _jaccard(q_tokens, c_tokens)
+                q_cov = len(q_tokens & c_tokens) / max(len(q_tokens), 1)
+                combined = 0.6 * q_cov + 0.3 * lexical + 0.1 * c.get("rrf_score", 0.0)
                 scored.append({**c, "relevance_score": combined})
             scored.sort(key=lambda x: -x["relevance_score"])
 

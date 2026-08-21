@@ -33,7 +33,7 @@ _OOD_PATTERNS = [
     r"\b(what is the )?weather (today|tomorrow)\b",
 ]
 
-RELEVANCE_THRESHOLD = 0.20          # τ = 0.20 from benchmarking
+RELEVANCE_THRESHOLD = 0.10          # τ = 0.10 from HHG calibration
 GROUNDING_THRESHOLD = 0.05          # min lexical overlap between answer and context
 
 
