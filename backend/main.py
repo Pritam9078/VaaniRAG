@@ -272,7 +272,7 @@ async def websocket_voice_endpoint(websocket: WebSocket):
         return
 
     try:
-        async with SarvamStream(api_key, mode="translate") as stream:
+        async with SarvamStream(api_key, mode="transcribe") as stream:
             
             # Start receiving STT events in background
             state = {"text": None, "ms": 0.0}
@@ -322,9 +322,22 @@ async def websocket_voice_endpoint(websocket: WebSocket):
                 await websocket.send_json({"type": "refused", "reason": input_check.reason, "stage": input_check.stage})
                 return
 
+            import re
+            search_query = transcript
+            if re.search(r"[\u0900-\u0D7F]", transcript):
+                try:
+                    translation = await asyncio.to_thread(
+                        groq_gen.generate,
+                        f"Translate the following user query to English. Return ONLY the English translation without any extra text or quotes.\n\nQuery: {transcript}",
+                        []
+                    )
+                    search_query = translation.strip().strip('"\'')
+                except Exception as e:
+                    logger.error(f"Query translation failed: {e}")
+
             # Retrieval & Rerank (Adaptive)
             r0 = time.perf_counter()
-            top_chunks, jina_used = _pipeline.run(transcript, top_n=2)
+            top_chunks, jina_used = _pipeline.run(search_query, top_n=2)
             retrieval_ms = (time.perf_counter() - r0) * 1000
             rerank_ms = 0.0
 
