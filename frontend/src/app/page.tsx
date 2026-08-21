@@ -591,7 +591,7 @@ export default function MainInterface() {
         if (data.refusal_reason) speakAnswer(data.refusal_reason);
       } else {
         setTier2Answer(data.answer);
-        setSources(data.sources);
+        setSources(data.sources || []);
         setLatencies(data.latencies || {});
         setGroundingScore(data.grounding_score);
         setStatus("answered");
