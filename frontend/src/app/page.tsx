@@ -582,6 +582,9 @@ export default function MainInterface() {
     setTranscript(text);
     resetPanel();
     setStatus("processing");
+    const slowWarning = setTimeout(() => {
+      setTier2Answer("Waking up backend server (this may take up to 50s on the free tier)...");
+    }, 2500);
 
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -591,6 +594,7 @@ export default function MainInterface() {
         body: JSON.stringify({ query: text, language: "en" }),
       });
       const data = await res.json();
+      clearTimeout(slowWarning);
       setDemoMode(false);
 
       if (data.status === "refused") {
@@ -598,6 +602,7 @@ export default function MainInterface() {
         setStatus("refused");
         if (data.refusal_reason) speakAnswer(data.refusal_reason);
       } else {
+        setTier1Answer(data.answer);
         setTier2Answer(data.answer);
         setSources(data.sources || []);
         setLatencies(data.latencies || {});
@@ -606,6 +611,7 @@ export default function MainInterface() {
         if (data.answer) speakAnswer(data.answer);
       }
     } catch (err) {
+      clearTimeout(slowWarning);
       setDemoMode(true);
       simulateResponse(text);
     }
@@ -869,12 +875,18 @@ export default function MainInterface() {
                     </h2>
 
                     <div className="space-y-6">
-                      {tier1Answer && (
+                      {(tier1Answer || status === "processing") && (
                         <div>
                           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#45e8c4]">
                             <Zap className="h-4 w-4" /> Quick Summary
                           </h3>
-                          <p className="font-body text-[#eef0f8]">{tier1Answer}</p>
+                          <p className="font-body text-[#eef0f8]">
+                            {tier1Answer || (
+                              <span className="text-[#7d84a3]">
+                                Retrieving context...
+                              </span>
+                            )}
+                          </p>
                         </div>
                       )}
 
