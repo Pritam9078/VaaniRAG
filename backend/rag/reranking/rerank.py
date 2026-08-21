@@ -36,36 +36,9 @@ def _jaccard(a: set, b: set) -> float:
 
 class JinaReranker:
     def __init__(self, model_id: str = "jinaai/jina-reranker-v2-base-multilingual", max_length: int = 128):
-        try:
-            import onnxruntime as ort
-            from huggingface_hub import hf_hub_download
-            from tokenizers import Tokenizer
-        except ImportError:
-            self._session = None
-            return
-
-        onnx_path = None
-        for candidate in ("onnx/model_int8.onnx", "onnx/model_quantized.onnx", "onnx/model.onnx"):
-            try:
-                onnx_path = hf_hub_download(model_id, candidate)
-                break
-            except Exception:
-                pass
-        
-        if not onnx_path:
-            self._session = None
-            return
-
-        opts = ort.SessionOptions()
-        opts.intra_op_num_threads = 2
-        opts.inter_op_num_threads = 1
-        opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        self._session = ort.InferenceSession(onnx_path, opts, providers=["CPUExecutionProvider"])
-        self._input_names = {i.name for i in self._session.get_inputs()}
-
-        self._tok = Tokenizer.from_file(hf_hub_download(model_id, "tokenizer.json"))
-        self._tok.enable_truncation(max_length=max_length)
-        self._tok.enable_padding()
+        # Disabled ONNX loading to prevent OOM on Render Free Tier
+        self._session = None
+        return
 
     def is_loaded(self):
         return self._session is not None
