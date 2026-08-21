@@ -629,7 +629,7 @@ export default function MainInterface() {
   // layout splits: the mic/input card moves to the left and the answer
   // takes the right column. Before that — idle, listening, or still
   // processing with nothing back yet — everything stays centered.
-  const hasResults = isSubsequentTurn || status === "answered" || status === "refused" || Boolean(tier1Answer);
+  const hasResults = status !== "idle";
 
   /* --------------------------------- Render --------------------------------- */
 
