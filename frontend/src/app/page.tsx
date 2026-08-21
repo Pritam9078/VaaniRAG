@@ -531,7 +531,7 @@ export default function MainInterface() {
     setIsRecording(false);
     stopLevelLoop();
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && !usingRecognitionRef.current) {
       wsRef.current.send(new ArrayBuffer(0));
     }
 
@@ -540,7 +540,7 @@ export default function MainInterface() {
       const finalText = transcript.trim();
       recognitionRef.current = null;
       if (usingRecognitionRef.current && finalText) {
-        simulateResponse(finalText);
+        handleTextSubmit(finalText);
       } else if (usingRecognitionRef.current) {
         setStatus("idle");
       }
