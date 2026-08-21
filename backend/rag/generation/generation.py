@@ -36,8 +36,7 @@ class ExtractiveGenerator(BaseGenerator):
         best_sentences = sorted(sentences, key=score, reverse=True)[:2]
         answer_core = " ".join(best_sentences) if any(score(s) for s in best_sentences) else sentences[0]
 
-        citations = " ".join(f"[{i+1}]" for i in range(min(len(context_chunks), 3)))
-        return f"{answer_core.strip()} {citations}"
+        return answer_core.strip()
 
 
 class AnthropicGenerator(BaseGenerator):
@@ -64,7 +63,7 @@ class AnthropicGenerator(BaseGenerator):
 
 
 class GroqGenerator(BaseGenerator):
-    def __init__(self, model: str = "allam-2-7b", max_tokens: int = 32):
+    def __init__(self, model: str = "allam-2-7b", max_tokens: int = 300):
         self.model = model
         self.max_tokens = max_tokens
         self.last_telemetry = {}

@@ -197,8 +197,10 @@ class SarvamStream:
                     if signal == "END_SPEECH":
                         flushed = True
             elif kind == "error":
-                log.error("sarvam error: %s", data)
-                raise RuntimeError(f"sarvam: {data.get('error')} ({data.get('code')})")
+                error_msg = msg.get("error") or msg.get("message") or data.get("error") or "Unknown error"
+                error_code = msg.get("code") or data.get("code") or "Unknown code"
+                log.error("sarvam error: %s", msg)
+                raise RuntimeError(f"sarvam: {error_msg} ({error_code})")
 
     async def mark_flushed(self) -> None:
         await self.flush()

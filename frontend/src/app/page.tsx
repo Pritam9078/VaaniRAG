@@ -11,6 +11,7 @@ import {
   Radio,
   Activity,
   Sparkles,
+  Layers,
 } from "lucide-react";
 
 /* ----------------------------------------------------------------------- */
@@ -394,8 +395,8 @@ export default function MainInterface() {
     window.setTimeout(() => {
       setLatencies((p) => ({ ...p, generation_ms: known ? 812 : 940 }));
       const ans = known
-          ? known.t2
-          : `Based on the retrieved passages, here is a reasoned answer to "${text.trim()}". In a connected deployment this would be produced by the tier‑2 generative model, grounded in the cited sources.`;
+        ? known.t2
+        : `Based on the retrieved passages, here is a reasoned answer to "${text.trim()}". In a connected deployment this would be produced by the tier‑2 generative model, grounded in the cited sources.`;
       setTier2Answer(ans);
       setGroundingScore(known ? known.conf : 0.72);
       speakAnswer(ans);
@@ -611,6 +612,12 @@ export default function MainInterface() {
 
   const orbActive = isRecording || status === "processing";
 
+  // Once the assistant has (or is about to have) an answer to show, the
+  // layout splits: the mic/input card moves to the left and the answer
+  // takes the right column. Before that — idle, listening, or still
+  // processing with nothing back yet — everything stays centered.
+  const hasResults = status === "answered" || status === "refused" || Boolean(tier1Answer);
+
   /* --------------------------------- Render --------------------------------- */
 
   return (
@@ -677,7 +684,10 @@ export default function MainInterface() {
         }}
       />
 
-      <div className="relative z-10 mx-auto max-w-4xl space-y-10 p-4 md:p-8">
+      <div
+        className={`relative z-10 mx-auto space-y-10 p-4 transition-[max-width] duration-500 md:p-8 ${hasResults ? "max-w-6xl" : "max-w-4xl"
+          }`}
+      >
         {/* Header */}
         <header className="mt-6 space-y-2 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#232840] bg-[#10131f]/70 px-3 py-1 text-[11px] font-data uppercase tracking-widest text-[#7d84a3] backdrop-blur">
@@ -692,137 +702,143 @@ export default function MainInterface() {
           </p>
         </header>
 
-        {/* Orb + Input */}
-        <div className="relative overflow-hidden rounded-[28px] border border-[#232840] bg-[#10131f]/80 p-8 shadow-[0_0_60px_-15px_rgba(69,232,196,0.15)] backdrop-blur-xl">
-          {transcript && status !== "idle" && (
-            <p className="font-body absolute left-6 right-6 top-5 text-center text-sm text-[#c7ccdc]/80">
-              {transcript}
-            </p>
-          )}
+        {/* Assistant card (left once answering) + Results (right once answering) */}
+        <div
+          className={`transition-all duration-500 ${hasResults
+              ? "grid grid-cols-1 items-start gap-6 md:grid-cols-[380px_1fr]"
+              : "mx-auto max-w-4xl"
+            }`}
+        >
+          {/* Orb + Input */}
+          <div className="relative overflow-hidden rounded-[28px] border border-[#232840] bg-[#10131f]/80 p-8 shadow-[0_0_60px_-15px_rgba(69,232,196,0.15)] backdrop-blur-xl">
+            {transcript && status !== "idle" && (
+              <p className="font-body absolute left-6 right-6 top-5 text-center text-sm text-[#c7ccdc]/80">
+                {transcript}
+              </p>
+            )}
 
-          <div className="flex flex-col items-center justify-center pt-10">
-            {/* radial spectrum */}
-            <div className="relative mb-2 flex h-44 w-44 items-center justify-center">
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{ display: isRecording ? "block" : "none" }}
-              >
-                {Array.from({ length: BAR_COUNT }).map((_, i) => {
-                  const angle = (i / BAR_COUNT) * 360;
-                  return (
-                    <div
-                      key={i}
-                      className="bar absolute left-1/2 top-1/2 h-6 w-[3px] rounded-full bg-gradient-to-t from-[#45e8c4] to-[#9d8cff]"
-                      style={{
-                        transform: `rotate(${angle}deg) translateY(-78px) scaleY(0.18)`,
-                        transformOrigin: "center 78px",
-                      }}
-                      ref={(el) => {
-                        barRefs.current[i] = el;
-                      }}
+            <div className="flex flex-col items-center justify-center pt-10">
+              {/* radial spectrum */}
+              <div className="relative mb-2 flex h-44 w-44 items-center justify-center">
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{ display: isRecording ? "block" : "none" }}
+                >
+                  {Array.from({ length: BAR_COUNT }).map((_, i) => {
+                    const angle = (i / BAR_COUNT) * 360;
+                    return (
+                      <div
+                        key={i}
+                        className="bar absolute left-1/2 top-1/2 h-6 w-[3px] rounded-full bg-gradient-to-t from-[#45e8c4] to-[#9d8cff]"
+                        style={{
+                          transform: `rotate(${angle}deg) translateY(-78px) scaleY(0.18)`,
+                          transformOrigin: "center 78px",
+                        }}
+                        ref={(el) => {
+                          barRefs.current[i] = el;
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* ripples */}
+                {isRecording && (
+                  <>
+                    <span className="absolute h-28 w-28 rounded-full border border-[#45e8c4]/40 animate-ripple" />
+                    <span
+                      className="absolute h-28 w-28 rounded-full border border-[#45e8c4]/30 animate-ripple"
+                      style={{ animationDelay: "0.6s" }}
                     />
-                  );
-                })}
+                  </>
+                )}
+
+                {/* rotating rings for depth */}
+                <div className="absolute h-28 w-28 rounded-full border border-dashed border-[#9d8cff]/25 animate-spin-slow" />
+                <div className="absolute h-24 w-24 rounded-full border border-dotted border-[#45e8c4]/25 animate-spin-reverse" />
+
+                <button
+                  onMouseDown={startRecording}
+                  onMouseUp={stopRecording}
+                  onMouseLeave={stopRecording}
+                  onTouchStart={startRecording}
+                  onTouchEnd={stopRecording}
+                  aria-pressed={isRecording}
+                  aria-label="Hold to speak"
+                  className={`
+                    relative flex h-24 w-24 flex-col items-center justify-center rounded-full
+                    transition-all duration-200 focus-visible:outline-none focus-visible:ring-2
+                    focus-visible:ring-[#45e8c4] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10131f]
+                    ${isRecording
+                      ? "scale-110 bg-gradient-to-br from-[#ff8a7a] to-[#e5555a] shadow-[0_0_50px_rgba(229,85,90,0.45)]"
+                      : "animate-breathe bg-gradient-to-br from-[#45e8c4] to-[#1f8f63] shadow-[0_0_40px_rgba(69,232,196,0.35)] hover:scale-105"
+                    }
+                  `}
+                  style={{
+                    boxShadow: isRecording
+                      ? "inset 0 -6px 14px rgba(0,0,0,0.25), 0 0 50px rgba(229,85,90,0.45)"
+                      : "inset 0 -6px 14px rgba(0,0,0,0.2), 0 0 40px rgba(69,232,196,0.3)",
+                  }}
+                >
+                  <Mic className={`h-8 w-8 text-white ${isRecording ? "animate-pulse" : ""}`} />
+                </button>
               </div>
-
-              {/* ripples */}
-              {isRecording && (
-                <>
-                  <span className="absolute h-28 w-28 rounded-full border border-[#45e8c4]/40 animate-ripple" />
-                  <span
-                    className="absolute h-28 w-28 rounded-full border border-[#45e8c4]/30 animate-ripple"
-                    style={{ animationDelay: "0.6s" }}
-                  />
-                </>
-              )}
-
-              {/* rotating rings for depth */}
-              <div className="absolute h-28 w-28 rounded-full border border-dashed border-[#9d8cff]/25 animate-spin-slow" />
-              <div className="absolute h-24 w-24 rounded-full border border-dotted border-[#45e8c4]/25 animate-spin-reverse" />
-
-              <button
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onMouseLeave={stopRecording}
-                onTouchStart={startRecording}
-                onTouchEnd={stopRecording}
-                aria-pressed={isRecording}
-                aria-label="Hold to speak"
-                className={`
-                  relative flex h-24 w-24 flex-col items-center justify-center rounded-full
-                  transition-all duration-200 focus-visible:outline-none focus-visible:ring-2
-                  focus-visible:ring-[#45e8c4] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10131f]
-                  ${isRecording
-                    ? "scale-110 bg-gradient-to-br from-[#ff8a7a] to-[#e5555a] shadow-[0_0_50px_rgba(229,85,90,0.45)]"
-                    : "animate-breathe bg-gradient-to-br from-[#45e8c4] to-[#1f8f63] shadow-[0_0_40px_rgba(69,232,196,0.35)] hover:scale-105"
-                  }
-                `}
-                style={{
-                  boxShadow: isRecording
-                    ? "inset 0 -6px 14px rgba(0,0,0,0.25), 0 0 50px rgba(229,85,90,0.45)"
-                    : "inset 0 -6px 14px rgba(0,0,0,0.2), 0 0 40px rgba(69,232,196,0.3)",
-                }}
-              >
-                <Mic className={`h-8 w-8 text-white ${isRecording ? "animate-pulse" : ""}`} />
-              </button>
+              <span className="font-data text-xs uppercase tracking-[0.2em] text-[#7d84a3]">
+                {isRecording ? "listening…" : "hold to speak"}
+              </span>
             </div>
-            <span className="font-data text-xs uppercase tracking-[0.2em] text-[#7d84a3]">
-              {isRecording ? "listening…" : "hold to speak"}
-            </span>
-          </div>
 
-          <div className="relative my-7 flex items-center justify-center">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[#232840]" />
+            <div className="relative my-7 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#232840]" />
+              </div>
+              <span className="font-data relative bg-[#10131f] px-4 text-[10px] uppercase tracking-widest text-[#4d536e]">
+                or type
+              </span>
             </div>
-            <span className="font-data relative bg-[#10131f] px-4 text-[10px] uppercase tracking-widest text-[#4d536e]">
-              or type
-            </span>
-          </div>
 
-          <form onSubmit={handleTextSubmit} className="mx-auto flex max-w-xl gap-3">
-            <input
-              type="text"
-              value={queryText}
-              onChange={(e) => setQueryText(e.target.value)}
-              placeholder="Ask your question…"
-              className="font-body flex-1 rounded-xl border border-[#232840] bg-[#0a0d16] px-4 py-3 text-[#eef0f8] placeholder:text-[#4d536e] transition-colors focus:border-[#45e8c4] focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={status === "processing" || !queryText.trim()}
-              className="font-display rounded-xl bg-[#1a2030] px-6 py-3 font-medium text-[#eef0f8] transition-colors hover:bg-gradient-to-r hover:from-[#45e8c4] hover:to-[#1f8f63] hover:text-[#070912] disabled:opacity-40"
-            >
-              Ask
-            </button>
-          </form>
-
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {[
-              "What is the capital of India?",
-              "How to make a bomb",
-              "My name is Het Patel",
-              "What is relativity?",
-            ].map((q) => (
+            <form onSubmit={handleTextSubmit} className="mx-auto flex max-w-xl gap-3">
+              <input
+                type="text"
+                value={queryText}
+                onChange={(e) => setQueryText(e.target.value)}
+                placeholder="Ask your question…"
+                className="font-body flex-1 rounded-xl border border-[#232840] bg-[#0a0d16] px-4 py-3 text-[#eef0f8] placeholder:text-[#4d536e] transition-colors focus:border-[#45e8c4] focus:outline-none"
+              />
               <button
-                key={q}
-                onClick={() => {
-                  setQueryText(q);
-                  handleTextSubmit(q);
-                }}
-                className="font-body rounded-full bg-[#161a2b] px-3 py-1.5 text-xs text-[#7d84a3] transition-colors hover:text-white"
+                type="submit"
+                disabled={status === "processing" || !queryText.trim()}
+                className="font-display rounded-xl bg-[#1a2030] px-6 py-3 font-medium text-[#eef0f8] transition-colors hover:bg-gradient-to-r hover:from-[#45e8c4] hover:to-[#1f8f63] hover:text-[#070912] disabled:opacity-40"
               >
-                {q}
+                Ask
               </button>
-            ))}
-          </div>
-        </div>
+            </form>
 
-        {/* Results */}
-        {(status === "answered" || status === "refused" || tier1Answer) && (
-          <div className="grid animate-fade-up grid-cols-1 gap-6 md:grid-cols-3">
-            <div className="space-y-6 md:col-span-2">
-              <div className="h-full rounded-2xl border border-[#232840] bg-[#10131f]/80 p-6 shadow-lg backdrop-blur-xl">
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {[
+                "What is the capital of India?",
+                "How to make a bomb",
+                "My name is Het Patel",
+                "What is relativity?",
+              ].map((q) => (
+                <button
+                  key={q}
+                  onClick={() => {
+                    setQueryText(q);
+                    handleTextSubmit(q);
+                  }}
+                  className="font-body rounded-full bg-[#161a2b] px-3 py-1.5 text-xs text-[#7d84a3] transition-colors hover:text-white"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Results */}
+          {hasResults && (
+            <div className="animate-fade-up space-y-6">
+              <div className="rounded-2xl border border-[#232840] bg-[#10131f]/80 p-6 shadow-lg backdrop-blur-xl">
                 {status === "refused" ? (
                   <div className="flex h-full flex-col items-center justify-center space-y-4 py-6 text-center">
                     <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#ff6b6a]/10">
@@ -842,40 +858,36 @@ export default function MainInterface() {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-6">
-                    <h2 className="font-data text-xs font-semibold uppercase tracking-widest text-[#7d84a3]">
-                      Two-tier generation
+                  <div className="rounded-2xl border border-[#232840] bg-[#10131f]/80 p-6 shadow-lg backdrop-blur-xl">
+                    <h2 className="font-data mb-4 text-xs font-semibold uppercase tracking-widest text-[#7d84a3]">
+                      Answer
                     </h2>
 
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-[#45e8c4]" />
-                        <span className="font-display text-sm font-medium text-[#45e8c4]">
-                          Tier 1 · Extractive (fast)
-                        </span>
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#45e8c4]">
+                          <Zap className="h-4 w-4" /> Quick Summary
+                        </h3>
+                        <p className="font-body text-[#eef0f8]">{tier1Answer}</p>
                       </div>
-                      <p className="font-body border-l-2 border-[#232840] pl-3 text-lg italic leading-relaxed text-[#a8adc2]">
-                        {tier1Answer}
-                      </p>
-                    </div>
 
-                    <div className="space-y-2 border-t border-[#232840] pt-4">
-                      <div className="flex items-center gap-2">
-                        <Server className="h-4 w-4 text-[#9d8cff]" />
-                        <span className="font-display text-sm font-medium text-[#9d8cff]">
-                          Tier 2 · Generative (reasoned)
-                        </span>
+                      <div className="border-t border-[#232840] pt-6">
+                        <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#9d8cff]">
+                          <Layers className="h-4 w-4" /> Detailed Response
+                        </h3>
                         {!tier2Answer && (
-                          <Loader2 className="h-3 w-3 animate-spin text-[#9d8cff]" />
+                          <div className="mb-3 h-1 w-24 overflow-hidden rounded bg-[#1a2030]">
+                            <div className="h-full w-1/2 animate-shimmer bg-[#9d8cff]" />
+                          </div>
                         )}
+                        <p className="font-body text-[#eef0f8]">
+                          {tier2Answer || (
+                            <span className="text-[#7d84a3]">
+                              Waiting for the generative model…
+                            </span>
+                          )}
+                        </p>
                       </div>
-                      <p className="font-body min-h-[3rem] text-lg leading-relaxed text-white">
-                        {tier2Answer || (
-                          <span className="italic text-[#7d84a3]/60">
-                            Waiting for the generative model…
-                          </span>
-                        )}
-                      </p>
                     </div>
 
                     {groundingScore !== null && (
@@ -890,99 +902,101 @@ export default function MainInterface() {
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-[#232840] bg-[#10131f]/80 p-6 shadow-lg backdrop-blur-xl">
-                <h2 className="font-data mb-4 flex justify-between text-xs font-semibold uppercase tracking-widest text-[#7d84a3]">
-                  <span className="flex items-center gap-1.5">
-                    <Activity className="h-3.5 w-3.5" /> Latency waterfall
-                  </span>
-                  <span className="text-white">{totalRAGMs.toFixed(0)}ms ttl</span>
-                </h2>
+              {/* Sidebar (latency + sources) sits below the answer, side by side */}
+              {process.env.NODE_ENV === "development" && (
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[#232840] bg-[#10131f]/80 p-6 shadow-lg backdrop-blur-xl">
+                    <h2 className="font-data mb-4 flex justify-between text-xs font-semibold uppercase tracking-widest text-[#7d84a3]">
+                      <span className="flex items-center gap-1.5">
+                        <Activity className="h-3.5 w-3.5" /> Latency waterfall
+                      </span>
+                      <span className="text-white">{totalRAGMs.toFixed(0)}ms ttl</span>
+                    </h2>
 
-                <div className="font-data space-y-3 text-xs">
-                  {latencies.guardrail_ms !== undefined && (
-                    <LatencyRow
-                      label="Guardrails"
-                      ms={latencies.guardrail_ms}
-                      pct={Math.min(100, latencies.guardrail_ms)}
-                      color="#ff6b6a"
-                    />
-                  )}
-                  {latencies.retrieval_ms !== undefined && (
-                    <LatencyRow
-                      label="Retrieval"
-                      ms={latencies.retrieval_ms}
-                      pct={Math.min(100, latencies.retrieval_ms / 2)}
-                      color="#45e8c4"
-                    />
-                  )}
-                  {latencies.rerank_ms !== undefined && (
-                    <LatencyRow
-                      label="Rerank"
-                      ms={latencies.rerank_ms}
-                      pct={Math.min(100, latencies.rerank_ms / 2)}
-                      color="#45e8c4"
-                    />
-                  )}
-                  {latencies.tier1_ms !== undefined && (
-                    <LatencyRow
-                      label="Tier 1 gen"
-                      ms={latencies.tier1_ms}
-                      pct={Math.min(100, latencies.tier1_ms)}
-                      color="#45e8c4"
-                    />
-                  )}
-                  {latencies.generation_ms !== undefined && (
-                    <div className="mt-2 space-y-1 border-t border-[#232840] pt-2">
-                      <div className="flex justify-between text-[#9d8cff]">
-                        <span>Tier 2 (async)</span>
-                        <span>{latencies.generation_ms.toFixed(1)}ms</span>
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded bg-[#1a2030]">
-                        <div
-                          className="h-full bg-[#9d8cff]"
-                          style={{
-                            width: `${Math.min(100, latencies.generation_ms / 10)}%`,
-                          }}
+                    <div className="font-data space-y-3 text-xs">
+                      {latencies.guardrail_ms !== undefined && (
+                        <LatencyRow
+                          label="Guardrails"
+                          ms={latencies.guardrail_ms}
+                          pct={Math.min(100, latencies.guardrail_ms)}
+                          color="#ff6b6a"
                         />
+                      )}
+                      {latencies.retrieval_ms !== undefined && (
+                        <LatencyRow
+                          label="Retrieval"
+                          ms={latencies.retrieval_ms}
+                          pct={Math.min(100, latencies.retrieval_ms / 2)}
+                          color="#45e8c4"
+                        />
+                      )}
+                      {latencies.rerank_ms !== undefined && (
+                        <LatencyRow
+                          label="Rerank"
+                          ms={latencies.rerank_ms}
+                          pct={Math.min(100, latencies.rerank_ms / 2)}
+                          color="#45e8c4"
+                        />
+                      )}
+                      {latencies.tier1_ms !== undefined && (
+                        <LatencyRow
+                          label="Tier 1 gen"
+                          ms={latencies.tier1_ms}
+                          pct={Math.min(100, latencies.tier1_ms)}
+                          color="#45e8c4"
+                        />
+                      )}
+                      {latencies.generation_ms !== undefined && (
+                        <div className="mt-2 space-y-1 border-t border-[#232840] pt-2">
+                          <div className="flex justify-between text-[#9d8cff]">
+                            <span>Tier 2 (async)</span>
+                            <span>{latencies.generation_ms.toFixed(1)}ms</span>
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded bg-[#1a2030]">
+                            <div
+                              className="h-full bg-[#9d8cff]"
+                              style={{
+                                width: `${Math.min(100, latencies.generation_ms / 10)}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {sources.length > 0 && (
+                    <div className="rounded-2xl border border-[#232840] bg-[#10131f]/80 p-6 shadow-lg backdrop-blur-xl">
+                      <h2 className="font-data mb-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-[#7d84a3]">
+                        <Sparkles className="h-3.5 w-3.5" /> Top sources
+                      </h2>
+                      <div className="space-y-3">
+                        {sources.map((s, idx) => (
+                          <div
+                            key={idx}
+                            className="font-data rounded-lg border border-[#232840] bg-[#0a0d16] p-3 text-xs"
+                          >
+                            <div className="mb-1.5 flex items-start justify-between text-[#7d84a3]">
+                              <span>ID: {s.doc_id.substring(0, 8)}</span>
+                              <span>{s.relevance_score?.toFixed(3)}</span>
+                            </div>
+                            <div className="h-1 overflow-hidden rounded bg-[#1a2030]">
+                              <div
+                                className="h-full bg-gradient-to-r from-[#45e8c4] to-[#9d8cff]"
+                                style={{ width: `${Math.min(100, (s.relevance_score || 0) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
                 </div>
-              </div>
-
-              {sources.length > 0 && (
-                <div className="rounded-2xl border border-[#232840] bg-[#10131f]/80 p-6 shadow-lg backdrop-blur-xl">
-                  <h2 className="font-data mb-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-[#7d84a3]">
-                    <Sparkles className="h-3.5 w-3.5" /> Top sources
-                  </h2>
-                  <div className="space-y-3">
-                    {sources.map((s, idx) => (
-                      <div
-                        key={idx}
-                        className="font-data rounded-lg border border-[#232840] bg-[#0a0d16] p-3 text-xs"
-                      >
-                        <div className="mb-1.5 flex items-start justify-between text-[#7d84a3]">
-                          <span>ID: {s.doc_id.substring(0, 8)}</span>
-                          <span>{s.relevance_score?.toFixed(3)}</span>
-                        </div>
-                        <div className="h-1 overflow-hidden rounded bg-[#1a2030]">
-                          <div
-                            className="h-full bg-gradient-to-r from-[#45e8c4] to-[#9d8cff]"
-                            style={{ width: `${Math.min(100, (s.relevance_score || 0) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
