@@ -197,6 +197,7 @@ export default function MainInterface() {
   const [latencies, setLatencies] = useState<Latencies>({});
   const [groundingScore, setGroundingScore] = useState<number | null>(null);
   const [demoMode, setDemoMode] = useState(false);
+  const [isSubsequentTurn, setIsSubsequentTurn] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -618,11 +619,17 @@ export default function MainInterface() {
 
   const orbActive = isRecording || status === "processing";
 
+  useEffect(() => {
+    if (status === "answered" || status === "refused") {
+      setIsSubsequentTurn(true);
+    }
+  }, [status]);
+
   // Once the assistant has (or is about to have) an answer to show, the
   // layout splits: the mic/input card moves to the left and the answer
   // takes the right column. Before that — idle, listening, or still
   // processing with nothing back yet — everything stays centered.
-  const hasResults = status === "answered" || status === "refused" || Boolean(tier1Answer);
+  const hasResults = isSubsequentTurn || status === "answered" || status === "refused" || Boolean(tier1Answer);
 
   /* --------------------------------- Render --------------------------------- */
 
