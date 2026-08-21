@@ -592,7 +592,7 @@ export default function MainInterface() {
       } else {
         setTier2Answer(data.answer);
         setSources(data.sources);
-        setLatencies(data.latencies);
+        setLatencies(data.latencies || {});
         setGroundingScore(data.grounding_score);
         setStatus("answered");
         if (data.answer) speakAnswer(data.answer);
@@ -604,10 +604,10 @@ export default function MainInterface() {
   };
 
   const totalRAGMs =
-    (latencies.guardrail_ms || 0) +
-    (latencies.retrieval_ms || 0) +
-    (latencies.rerank_ms || 0) +
-    (latencies.tier1_ms || 0);
+    (latencies?.guardrail_ms || 0) +
+    (latencies?.retrieval_ms || 0) +
+    (latencies?.rerank_ms || 0) +
+    (latencies?.tier1_ms || 0);
 
   const orbActive = isRecording || status === "processing";
 
