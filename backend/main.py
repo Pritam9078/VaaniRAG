@@ -49,7 +49,7 @@ logger = logging.getLogger("vaanirag")
 APP_DIR = Path(__file__).resolve().parent
 INDEX_DIR = APP_DIR / "artifacts" / "msmarco_xi" / "v001"
 
-load_dotenv(APP_DIR / ".env")
+load_dotenv(APP_DIR.parent / ".env")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

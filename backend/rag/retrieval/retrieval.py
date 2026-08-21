@@ -111,7 +111,6 @@ class HybridIndex:
             scores = self.bm25.get_scores(tokens)
             if isinstance(scores, dict) and not scores:
                 return []
-            import numpy as np
             if isinstance(scores, np.ndarray):
                 if len(scores) < k:
                     k = len(scores)

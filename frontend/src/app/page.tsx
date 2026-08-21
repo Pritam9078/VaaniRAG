@@ -274,6 +274,14 @@ export default function MainInterface() {
     });
   }, []);
 
+  const speakAnswer = (text: string) => {
+    if (!text || typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handleWebSocketMessage = (msg: WSMessage) => {
     switch (msg.type) {
       case "transcript_partial":
@@ -290,17 +298,20 @@ export default function MainInterface() {
         setTier2Answer(msg.answer || "");
         if (msg.grounding_score) setGroundingScore(msg.grounding_score);
         if (msg.latencies) setLatencies((prev) => ({ ...prev, ...msg.latencies }));
+        if (msg.answer) speakAnswer(msg.answer);
         break;
       case "refused":
       case "tier2_refused":
         setRefusal({ reason: msg.reason || "Unknown", stage: msg.stage || "generation" });
         setStatus("refused");
+        if (msg.reason) speakAnswer(msg.reason);
         break;
       case "error":
       case "tier2_error":
         console.error("Server Error:", msg.message);
         setRefusal({ reason: msg.message || "Server Error", stage: "error" });
         setStatus("refused");
+        if (msg.message) speakAnswer(msg.message);
         break;
     }
   };
@@ -325,12 +336,13 @@ export default function MainInterface() {
     if (DANGEROUS_PATTERNS.some((p) => lower.includes(p))) {
       window.setTimeout(() => {
         setLatencies({ guardrail_ms: 4.2 });
+        const reason = "The query matched a restricted-content safety policy and was blocked before retrieval.";
         setRefusal({
-          reason:
-            "The query matched a restricted-content safety policy and was blocked before retrieval.",
+          reason: reason,
           stage: "input_guardrail",
         });
         setStatus("refused");
+        speakAnswer(reason);
       }, 260);
       return;
     }
@@ -338,12 +350,13 @@ export default function MainInterface() {
     if (/^my name is|^i am\s/i.test(text.trim())) {
       window.setTimeout(() => {
         setLatencies({ guardrail_ms: 3.8, retrieval_ms: 61.2 });
+        const reason = "No passages in the index were relevant to this input — it falls outside the assistant's knowledge scope.";
         setRefusal({
-          reason:
-            "No passages in the index were relevant to this input — it falls outside the assistant's knowledge scope.",
+          reason: reason,
           stage: "retrieval",
         });
         setStatus("refused");
+        speakAnswer(reason);
       }, 320);
       return;
     }
@@ -380,12 +393,12 @@ export default function MainInterface() {
     }, 260);
     window.setTimeout(() => {
       setLatencies((p) => ({ ...p, generation_ms: known ? 812 : 940 }));
-      setTier2Answer(
-        known
+      const ans = known
           ? known.t2
-          : `Based on the retrieved passages, here is a reasoned answer to "${text.trim()}". In a connected deployment this would be produced by the tier‑2 generative model, grounded in the cited sources.`
-      );
+          : `Based on the retrieved passages, here is a reasoned answer to "${text.trim()}". In a connected deployment this would be produced by the tier‑2 generative model, grounded in the cited sources.`;
+      setTier2Answer(ans);
       setGroundingScore(known ? known.conf : 0.72);
+      speakAnswer(ans);
     }, known ? 1050 : 1300);
   };
 
@@ -425,6 +438,9 @@ export default function MainInterface() {
 
   const startRecording = async () => {
     try {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
       setTranscript("");
       resetPanel();
 
@@ -552,6 +568,9 @@ export default function MainInterface() {
 
     if (!text.trim()) return;
 
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     setTranscript(text);
     resetPanel();
     setStatus("processing");
@@ -569,12 +588,14 @@ export default function MainInterface() {
       if (data.status === "refused") {
         setRefusal({ reason: data.refusal_reason, stage: data.refusal_stage });
         setStatus("refused");
+        if (data.refusal_reason) speakAnswer(data.refusal_reason);
       } else {
         setTier2Answer(data.answer);
         setSources(data.sources);
         setLatencies(data.latencies);
         setGroundingScore(data.grounding_score);
         setStatus("answered");
+        if (data.answer) speakAnswer(data.answer);
       }
     } catch (err) {
       setDemoMode(true);

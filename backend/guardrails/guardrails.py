@@ -22,7 +22,7 @@ from typing import Any
 _TOKEN_RE = re.compile(r"[A-Za-z\u0900-\u0D7F]{2,}")
 
 _UNSAFE_PATTERNS = [
-    r"\bhow to (make|build) a (bomb|weapon|explosive)\b",
+    r"\bhow to (make|build) (a )?(bomb|weapon|explosive)s?\b",
     r"\bkill (myself|someone)\b",
     r"\bhack (into|a) \w+ (account|system)\b",
 ]
