@@ -855,12 +855,8 @@ export default function MainInterface() {
                     </div>
                     <div>
                       <h2 className="font-display text-xl font-bold text-[#ff6b6a]">
-                        Blocked by guardrail
+                        I cannot answer this
                       </h2>
-                      <p className="font-body mt-2 text-sm text-[#7d84a3]">
-                        Stage:{" "}
-                        <span className="font-data text-[#eef0f8]">{refusal?.stage}</span>
-                      </p>
                       <p className="font-body mt-3 inline-block rounded-lg border-l-2 border-[#ff6b6a] bg-[#0a0d16] p-3 text-left text-sm text-[#eef0f8]">
                         {refusal?.reason}
                       </p>
