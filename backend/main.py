@@ -272,7 +272,7 @@ async def websocket_voice_endpoint(websocket: WebSocket):
         return
 
     try:
-        async with SarvamStream(api_key) as stream:
+        async with SarvamStream(api_key, mode="translate") as stream:
             
             # Start receiving STT events in background
             state = {"text": None, "ms": 0.0}
