@@ -56,16 +56,16 @@ def check_input(query: str) -> GuardrailResult:
     # 1. Safety Gate
     for pattern in _UNSAFE_PATTERNS:
         if re.search(pattern, q):
-            return GuardrailResult(False, "safety", "Query flagged as unsafe.")
+            return GuardrailResult(False, "safety", "I'm sorry, but I can't help with that request.")
             
     # 2. Scope Gate (Intent)
     for pattern in _OOD_PATTERNS:
         if re.fullmatch(pattern, q) or re.search(pattern, q):
-            return GuardrailResult(False, "scope", "Query is out of scope (conversational/OOD).")
+            return GuardrailResult(False, "scope", "That's outside my area of expertise. I can only answer questions based on the documents.")
             
     # 3. Degenerate Gate (Tokens)
     if len(_tokens(q)) == 0:
-         return GuardrailResult(False, "degenerate", "No lexical content tokens found.")
+         return GuardrailResult(False, "degenerate", "I couldn't understand that. Could you please rephrase?")
             
     return GuardrailResult(True, "input")
 
@@ -73,15 +73,14 @@ def check_input(query: str) -> GuardrailResult:
 def check_retrieval(candidates: list[dict[str, Any]]) -> GuardrailResult:
     # 3. Degenerate Gate (BM25 hits check equivalent - if no candidates at all)
     if not candidates:
-        return GuardrailResult(False, "degenerate", "No lexical evidence (0 BM25 hits).")
+        return GuardrailResult(False, "degenerate", "I couldn't find any documents matching your question.")
         
     # 4. Weak Retrieval Gate
     top_score = candidates[0].get("relevance_score", 0.0)
     if top_score < RELEVANCE_THRESHOLD:
         return GuardrailResult(
             False, "weak_retrieval",
-            f"Top retrieval relevance ({top_score:.3f}) below floor "
-            f"({RELEVANCE_THRESHOLD})."
+            "I couldn't find any relevant information to answer your question."
         )
     return GuardrailResult(True, "retrieval")
 

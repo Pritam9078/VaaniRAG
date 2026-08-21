@@ -206,6 +206,7 @@ export default function MainInterface() {
   const levelRafRef = useRef<number | null>(null);
   const recognitionRef = useRef<any>(null);
   const usingRecognitionRef = useRef(false);
+  const fallbackTranscriptRef = useRef("");
 
   const barRefs = useRef<Array<HTMLDivElement | null>>([]);
   const BAR_COUNT = 28;
@@ -441,6 +442,10 @@ export default function MainInterface() {
     try {
       if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.cancel();
+        // Unlock speech synthesis on iOS/Safari by speaking an empty string on user gesture
+        const unlockUtterance = new SpeechSynthesisUtterance("");
+        unlockUtterance.volume = 0;
+        window.speechSynthesis.speak(unlockUtterance);
       }
       setTranscript("");
       resetPanel();
@@ -511,6 +516,7 @@ export default function MainInterface() {
             text += event.results[i][0].transcript;
           }
           setTranscript(text);
+          fallbackTranscriptRef.current = text;
         };
         recognition.onerror = () => {
           /* swallowed — user can still type a query */
@@ -537,7 +543,7 @@ export default function MainInterface() {
 
     if (recognitionRef.current) {
       recognitionRef.current.stop();
-      const finalText = transcript.trim();
+      const finalText = fallbackTranscriptRef.current.trim();
       recognitionRef.current = null;
       if (usingRecognitionRef.current && finalText) {
         handleTextSubmit(finalText);
