@@ -121,7 +121,7 @@ class SarvamStream:
             url,
             additional_headers={"Api-Subscription-Key": self.api_key},
             open_timeout=10,
-            ping_interval=20,
+            ping_interval=None,
         )
         self._t0 = time.perf_counter()
         log.info("sarvam stream open")
