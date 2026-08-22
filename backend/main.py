@@ -335,6 +335,7 @@ async def websocket_voice_endpoint(websocket: WebSocket):
                 await asyncio.sleep(0.05)
                 return
 
+            is_translated = False
             import re
             search_query = transcript
             if re.search(r"[\u0900-\u0D7F]", transcript):
@@ -345,6 +346,7 @@ async def websocket_voice_endpoint(websocket: WebSocket):
                         []
                     )
                     search_query = translation.strip().strip('"\'')
+                    is_translated = True
                 except Exception as e:
                     logger.error(f"Query translation failed: {e}")
 
@@ -365,7 +367,10 @@ async def websocket_voice_endpoint(websocket: WebSocket):
 
             # Tier 1: Extractive
             tier1_start = time.perf_counter()
-            tier1_answer = ext_gen.generate(transcript, top_chunks)
+            if is_translated:
+                tier1_answer = "..."
+            else:
+                tier1_answer = ext_gen.generate(transcript, top_chunks)
             tier1_ms = (time.perf_counter() - tier1_start) * 1000
             
             sources_out = [

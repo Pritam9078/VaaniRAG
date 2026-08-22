@@ -95,7 +95,7 @@ class GroqGenerator(BaseGenerator):
         t_setup_end = time.perf_counter()
         
         sources = "\n".join(f"[{i+1}] {c['text']}" for i, c in enumerate(context_chunks))
-        system = "Answer conversationally using ONLY the sources below. Do NOT use citations like [1]. ONE short sentence."
+        system = "Answer conversationally using ONLY the sources below. Do NOT use citations like [1]. ONE short sentence. Answer in the exact SAME language as the user's Question."
         
         payload = {
             "model": self.model,
