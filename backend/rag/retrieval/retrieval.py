@@ -88,12 +88,8 @@ class HybridIndex:
             sys.modules['rag.embeddings'] = types.ModuleType('rag.embeddings')
         sys.modules['rag.embeddings.encoder'] = hhg_rag
         
-        embedder_path = self.index_dir / "embedder.pkl"
-        if embedder_path.exists():
-            with open(embedder_path, "rb") as f:
-                self.embedder = pickle.load(f)
-        else:
-            self.embedder = hhg_rag.Model2VecEmbedder()
+        with open(self.index_dir / "embedder.pkl", "rb") as f:
+            self.embedder = pickle.load(f)
             
         with open(self.index_dir / "chunks.json", "r", encoding="utf-8") as f:
             self.chunks: list[dict[str, Any]] = json.load(f)

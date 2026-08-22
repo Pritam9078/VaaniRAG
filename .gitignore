@@ -64,4 +64,3 @@ frontend/yarn-error.log*
 backend/.env
 evaluation/queries.json
 evaluation/results/
-backend/data/index/embedder.pkl
