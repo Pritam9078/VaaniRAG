@@ -281,7 +281,8 @@ export default function MainInterface() {
     if (!text || typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-IN";
+    const containsHindi = /[\u0900-\u097F]/.test(text);
+    utterance.lang = containsHindi ? "hi-IN" : "en-IN";
     window.speechSynthesis.speak(utterance);
   };
 
