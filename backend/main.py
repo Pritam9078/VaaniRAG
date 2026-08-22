@@ -277,17 +277,28 @@ async def websocket_voice_endpoint(websocket: WebSocket):
             # Start receiving STT events in background
             state = {"text": None, "ms": 0.0}
             async def receive_stt():
-                async for event in stream.receive():
-                    if isinstance(event, Transcript):
-                        await websocket.send_json({
-                            "type": "transcript_partial",
-                            "text": event.text,
-                            "is_final": event.is_final
-                        })
-                        state["text"] = event.text
-                        state["ms"] = event.elapsed_ms
-                        if event.is_final:
+                try:
+                    async for event in stream.receive():
+                        if isinstance(event, Exception):
+                            error_str = str(event)
+                            if "sarvam" in error_str.lower():
+                                # Sarvam's content filter often cuts the connection with "Unknown error" for unsafe audio.
+                                await websocket.send_json({"type": "refused", "reason": "I'm sorry, but I can't help with that request.", "stage": "safety"})
+                            else:
+                                await websocket.send_json({"type": "error", "message": error_str})
                             break
+                        if isinstance(event, Transcript):
+                            await websocket.send_json({
+                                "type": "transcript_partial",
+                                "text": event.text,
+                                "is_final": event.is_final
+                            })
+                            state["text"] = event.text
+                            state["ms"] = event.elapsed_ms
+                            if event.is_final:
+                                break
+                except Exception as e:
+                    await websocket.send_json({"type": "error", "message": f"STT stream error: {e}"})
 
             receive_task = asyncio.create_task(receive_stt())
 

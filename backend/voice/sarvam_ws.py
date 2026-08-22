@@ -157,7 +157,7 @@ class SarvamStream:
             raise RuntimeError("stream not open")
         await self._ws.send(json.dumps({"type": "flush"}))
 
-    async def receive(self) -> AsyncIterator[Transcript | SpeechEvent]:
+    async def receive(self) -> AsyncIterator[Transcript | SpeechEvent | Exception]:
         """Yield transcripts and VAD events as they arrive.
 
         Sarvam's `data` messages do not carry an explicit partial/final flag, so finality is
@@ -200,7 +200,7 @@ class SarvamStream:
                 error_msg = msg.get("error") or msg.get("message") or data.get("error") or "Unknown error"
                 error_code = msg.get("code") or data.get("code") or "Unknown code"
                 log.error("sarvam error: %s", msg)
-                raise RuntimeError(f"sarvam: {error_msg} ({error_code})")
+                yield Exception(f"sarvam: {error_msg} ({error_code})")
 
     async def mark_flushed(self) -> None:
         await self.flush()
