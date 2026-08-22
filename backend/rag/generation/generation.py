@@ -49,9 +49,10 @@ class AnthropicGenerator(BaseGenerator):
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         sources = "\n".join(f"[{i+1}] {c['text']}" for i, c in enumerate(context_chunks))
         system = (
-            "Answer the user's question using ONLY the numbered sources below. "
-            "Cite sources inline like [1], [2]. If the answer is not contained "
-            "in the sources, say you don't have enough information."
+            "Answer the user's question conversationally using ONLY the sources below. "
+            "Do NOT use any citations, brackets, or reference numbers (like [1]) since your "
+            "response will be read aloud by a voice assistant. Keep it to one short sentence. "
+            "If the answer is not contained in the sources, say you don't have enough information."
         )
         msg = client.messages.create(
             model=self.model,
@@ -94,7 +95,7 @@ class GroqGenerator(BaseGenerator):
         t_setup_end = time.perf_counter()
         
         sources = "\n".join(f"[{i+1}] {c['text']}" for i, c in enumerate(context_chunks))
-        system = "Answer using ONLY the sources below. Cite like [1]. ONE short sentence."
+        system = "Answer conversationally using ONLY the sources below. Do NOT use citations like [1]. ONE short sentence."
         
         payload = {
             "model": self.model,
