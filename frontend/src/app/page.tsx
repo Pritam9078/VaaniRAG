@@ -318,6 +318,11 @@ export default function MainInterface() {
         break;
       case "error":
       case "tier2_error":
+        if (msg.message === "No transcript received") {
+          console.log("No transcript received (user didn't speak).");
+          setStatus("idle");
+          break;
+        }
         console.error("Server Error:", msg.message);
         setRefusal({ reason: msg.message || "Server Error", stage: "error" });
         setStatus("refused");
