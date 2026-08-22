@@ -64,7 +64,7 @@ class AnthropicGenerator(BaseGenerator):
 
 
 class GroqGenerator(BaseGenerator):
-    def __init__(self, model: str = "allam-2-7b", max_tokens: int = 300):
+    def __init__(self, model: str = "openai/gpt-oss-20b", max_tokens: int = 300):
         self.model = model
         self.max_tokens = max_tokens
         self.last_telemetry = {}
