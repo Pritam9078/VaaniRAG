@@ -94,8 +94,12 @@ class GroqGenerator(BaseGenerator):
         self._init_client()
         t_setup_end = time.perf_counter()
         
-        sources = "\n".join(f"[{i+1}] {c['text']}" for i, c in enumerate(context_chunks))
-        system = "Answer conversationally using ONLY the sources below. Do NOT use citations like [1]. ONE short sentence. Answer in the exact SAME language as the user's Question. If the sources do NOT contain the answer, say 'I don't have enough information to answer that based on the context'."
+        if not context_chunks:
+            sources = ""
+            system = "You are a helpful translation assistant. Do exactly as requested."
+        else:
+            sources = "\n".join(f"[{i+1}] {c['text']}" for i, c in enumerate(context_chunks))
+            system = "Answer conversationally using ONLY the sources below. Do NOT use citations like [1]. ONE short sentence. Answer in the exact SAME language as the user's Question. If the sources do NOT contain the answer, say 'I don't have enough information to answer that based on the context'."
         
         payload = {
             "model": self.model,

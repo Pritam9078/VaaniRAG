@@ -139,20 +139,8 @@ def run_pipeline(transcript: str, stt_ms: float, language: str | None = None) ->
     if pipeline is None:
         raise HTTPException(status_code=503, detail="Pipeline not loaded. Run build_index first.")
 
-    import re
     search_query = transcript
-    if re.search(r"[\u0900-\u0D7F]", transcript):
-        try:
-            translation = _generator.generate(
-                query=f"Translate the following user query to English. Return ONLY the English translation without any extra text or quotes.\n\nQuery: {transcript}",
-                context_chunks=[]
-            )
-            # Remove any possible quotes from the translation
-            search_query = translation.strip().strip('"\'')
-            # Since we translated the query to English, we must search the English chunks
-            language = "en"
-        except Exception as e:
-            print(f"Query translation failed: {e}")
+    language = None
 
     # ---- Stage: adaptive hybrid retrieval (dense + BM25 + RRF) + rerank ----
     r0 = time.perf_counter()
@@ -336,19 +324,7 @@ async def websocket_voice_endpoint(websocket: WebSocket):
                 return
 
             is_translated = False
-            import re
             search_query = transcript
-            if re.search(r"[\u0900-\u0D7F]", transcript):
-                try:
-                    translation = await asyncio.to_thread(
-                        groq_gen.generate,
-                        f"Translate the following user query to English. Return ONLY the English translation without any extra text or quotes.\n\nQuery: {transcript}",
-                        []
-                    )
-                    search_query = translation.strip().strip('"\'')
-                    is_translated = True
-                except Exception as e:
-                    logger.error(f"Query translation failed: {e}")
 
             # Retrieval & Rerank (Adaptive)
             r0 = time.perf_counter()
