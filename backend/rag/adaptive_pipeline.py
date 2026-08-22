@@ -37,14 +37,14 @@ class AdaptivePipeline:
         # Features
         dense_top = dense[0][0] if dense else -1
         sparse_top = sparse[0][0] if sparse else -2
-        agreement = 1.0 if dense_top == sparse_top else 0.0
+        agreement = 1.0 if dense_top == sparse_top and dense_top >= 0 else 0.0
         
         rrf_top1 = ranked[0][1] if ranked else 0.0
         rrf_top2 = ranked[1][1] if len(ranked) > 1 else 0.0
         rrf_margin = (rrf_top1 - rrf_top2) / (rrf_top1 + 1e-9)
         
-        max_dense = max([s for _, s in dense]) if dense else 0.0
-        dense_score = dense[0][1] / (max_dense + 1e-9) if dense else 0.0
+        # Do not normalize dense score against max_dense; use absolute cosine similarity
+        dense_score = dense[0][1] if dense else 0.0
         
         # Confidence
         w1, w2, w3, t = self.weights["w1"], self.weights["w2"], self.weights["w3"], self.weights["threshold"]
