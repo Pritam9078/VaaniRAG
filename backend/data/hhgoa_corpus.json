@@ -1,0 +1,82 @@
+[
+  {
+    "doc_id": "hhgoa_2026_01",
+    "query_tgt": "What is HH Goa 2026?",
+    "passages": [
+      {
+        "lang": "en",
+        "text": "Hacker House Goa (HH Goa) 2026 is a 4-day, in-person builder/hackathon residency in Goa, India. It takes place from 28-31 October 2026. It is a highly build-focused event centered around shipping projects rather than conventional networking. Developers, designers, product managers, and people with strong ideas can participate in teams of 1-3 or as solo participants. HH Goa provides workspace, power outlets, Wi-Fi, meals, caffeine, and accommodation for free, but participants must travel to Goa themselves.",
+        "is_selected": 1
+      },
+      {
+        "lang": "hi",
+        "text": "Hacker House Goa (HH Goa) 2026 एक 4-दिन का in-person builder/hackathon event है। यह Goa, India में 28-31 October 2026 को होगा। Developers, designers, product managers, और अच्छे ideas वाले लोग solo या 1-3 members की teams में भाग ले सकते हैं। HH Goa workspace, power, Wi-Fi, meals, caffeine, और accommodation मुफ्त देता है, लेकिन Goa तक travel खुद करना होगा।",
+        "is_selected": 1
+      }
+    ]
+  },
+  {
+    "doc_id": "hhgoa_2026_02",
+    "query_tgt": "What is the selection process for HH Goa?",
+    "passages": [
+      {
+        "lang": "en",
+        "text": "The HH Goa 2026 selection process involves multiple stages: Registration, Open Trials (skill-based challenges), Alpha, Beta (deeper technical & portfolio review), Charlie (interviews + team fit), Delta, Partner Trials, RSVP & Stake, and finally the Residency. Just applying is not enough; performance in the shortlisting tasks like Task 1 and Task 2 is crucial.",
+        "is_selected": 1
+      },
+      {
+        "lang": "hi",
+        "text": "HH Goa 2026 का selection process इस तरह है: Registration -> Open Trials -> Alpha -> Beta -> Charlie -> Delta -> Partner Trials -> RSVP -> Residency। सिर्फ application भरना पर्याप्त नहीं है, shortlisting tasks (Task 1, Task 2) में performance बहुत महत्वपूर्ण है।",
+        "is_selected": 1
+      }
+    ]
+  },
+  {
+    "doc_id": "hhgoa_2026_03",
+    "query_tgt": "What is Task 2 for HH Goa 2026?",
+    "passages": [
+      {
+        "lang": "en",
+        "text": "Task 2 for HH Goa 2026 requires participants to build a Voice-Enabled RAG Model. The technical requirements include using Sarvam or ElevenLabs for STT, deploying multiple chunking strategies (fixed-size, semantic, adaptive, metadata-aware), achieving a latency target of <200ms, providing latency analytics (P50, P70, P100), and using a robust model harness (orchestrator with validation, retrieval, reranking, generation, retries). It must also include strict guardrails to refuse unsafe, off-topic, or ungrounded queries. The dataset specified is AI4Bharat MSMARCO-XI.",
+        "is_selected": 1
+      },
+      {
+        "lang": "hi",
+        "text": "HH Goa 2026 के Task 2 में एक Voice-Enabled RAG Model बनाना है। इसमें Sarvam या ElevenLabs STT, multiple chunking strategies, <200ms latency, P50/P70/P100 analytics, और मजबूत guardrails (unsafe या off-topic queries को refuse करने के लिए) की जरूरत है। Dataset AI4Bharat MSMARCO-XI होना चाहिए।",
+        "is_selected": 1
+      }
+    ]
+  },
+  {
+    "doc_id": "hhgoa_2026_04",
+    "query_tgt": "What are the rules for building beforehand at HH Goa?",
+    "passages": [
+      {
+        "lang": "en",
+        "text": "For HH Goa 2026, you can brainstorm, plan architectures, and prepare ideas beforehand, but all code must be written during the in-person hackathon in Goa. Using existing libraries, APIs, and frameworks is encouraged, but bringing a pre-built complete solution is not allowed.",
+        "is_selected": 1
+      },
+      {
+        "lang": "hi",
+        "text": "HH Goa में आप पहले से brainstorming कर सकते हैं, architecture plan कर सकते हैं, लेकिन official in-person hackathon के दौरान code वहीं लिखा जाना चाहिए। Existing libraries और APIs allowed हैं, लेकिन पहले से बना हुआ complete solution लेकर जाना allowed नहीं है।",
+        "is_selected": 1
+      }
+    ]
+  },
+  {
+    "doc_id": "hhgoa_2026_05",
+    "query_tgt": "What is the schedule and timeline for HH Goa 2026?",
+    "passages": [
+      {
+        "lang": "en",
+        "text": "The HH Goa 2026 timeline starts with Registration in May, followed by Trials and shortlisting from August to September, ending with the Residency on October 28-31, 2026. The 4-day event schedule is: Day 1 (Genesis Day - where it begins), Day 2 (Day of Triangle - Problem/Solution/Market), Day 3 (Build Day - Heads down. Ship or ship), and Day 4 (Launch Day - The world watches).",
+        "is_selected": 1
+      },
+      {
+        "lang": "hi",
+        "text": "HH Goa 2026 Residency 28-31 October 2026 को होगी। 4-दिन का schedule: Day 1 (शुरुआत / Genesis), Day 2 (Problem -> Solution -> Market), Day 3 (पूरा focus -> Build -> Ship), और Day 4 (Launch और public presentation)।",
+        "is_selected": 1
+      }
+    ]
+  }
+]

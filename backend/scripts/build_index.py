@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     # The new build_index streaming support will be added in indexing.py
     stats = build_index(
-        corpus_path=None, # Will use stream in indexing.py
+        corpus_path="backend/data/merged_corpus.json",
         out_dir=str(ROOT / "backend" / "data" / "index"),
         strategies=["fixed", "sentence", "semantic", "adaptive"],
         embedding_backend="model2vec",
