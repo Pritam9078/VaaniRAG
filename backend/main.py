@@ -216,12 +216,13 @@ def run_pipeline(transcript: str, stt_ms: float, language: str | None = None) ->
 
     total_ms = (time.perf_counter() - t_start) * 1000 + stt_ms
 
-    if not output_check.allowed:
+    if not output_check.allowed or ground_score < guardrails.GROUNDING_THRESHOLD:
+        reason = output_check.reason if not output_check.allowed else "Answer contains too much hallucinated text."
         return AskResponse(
             status="refused",
             transcript=transcript,
-            refusal_reason=output_check.reason,
-            refusal_stage=output_check.stage,
+            refusal_reason=reason,
+            refusal_stage=output_check.stage if not output_check.allowed else "output",
             sources=[SourceChunk(**{k: c.get(k, "unknown") for k in
                      ("chunk_id", "doc_id", "text", "chunk_type", "language")},
                      relevance_score=c.get("relevance_score", 0.0)) for c in top_chunks],

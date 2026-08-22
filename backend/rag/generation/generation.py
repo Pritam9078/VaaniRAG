@@ -212,8 +212,8 @@ class GroqGenerator(BaseGenerator):
             # Strip out citations like [1] and references to sources for clean TTS
             import re
             content = re.sub(r'\[\d+\]', '', str(content))
-            content = re.sub(r',?\s*as mentioned in source.*', '.', content, flags=re.IGNORECASE)
-            content = re.sub(r',?\s*according to source.*', '.', content, flags=re.IGNORECASE)
+            content = re.sub(r',?\s*as mentioned in source\s*\[?\d+\]?', '', content, flags=re.IGNORECASE)
+            content = re.sub(r'according to source\s*\[?\d+\]?,?\s*', '', content, flags=re.IGNORECASE)
             return content.strip()
         return ""
 

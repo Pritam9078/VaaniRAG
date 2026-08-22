@@ -95,6 +95,10 @@ def check_output_grounding(answer: str, context_chunks: list[dict[str, Any]]) ->
     if not answer_tokens:
         return GuardrailResult(False, "output", "Answer has no extractable content.")
     
+    refusal_phrases = ["don't have enough information", "based on the context", "cannot answer", "do not have"]
+    if any(p in answer.lower() for p in refusal_phrases):
+        return GuardrailResult(False, "output", "LLM refused to answer based on context.")
+    
     # If the answer contains Indic characters, lexical overlap against English context won't work well
     # without translation. Skip for cross-lingual.
     if re.search(r"[\u0900-\u0D7F]", answer):
