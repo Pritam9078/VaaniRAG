@@ -208,7 +208,14 @@ class GroqGenerator(BaseGenerator):
             "rate_limit_headers": rate_limit_headers
         }
         
-        return str(content) if content else ""
+        if content:
+            # Strip out citations like [1] and references to sources for clean TTS
+            import re
+            content = re.sub(r'\[\d+\]', '', str(content))
+            content = re.sub(r',?\s*as mentioned in source.*', '.', content, flags=re.IGNORECASE)
+            content = re.sub(r',?\s*according to source.*', '.', content, flags=re.IGNORECASE)
+            return content.strip()
+        return ""
 
 
 def get_generator(backend: str = None) -> BaseGenerator:
