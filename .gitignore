@@ -64,3 +64,4 @@ frontend/yarn-error.log*
 backend/.env
 evaluation/queries.json
 evaluation/results/
+rag-local-eval-loop/

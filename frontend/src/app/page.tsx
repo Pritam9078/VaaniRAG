@@ -606,6 +606,12 @@ export default function MainInterface() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: text, language: "en" }),
       });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server error: ${res.status}`);
+      }
+      
       const data = await res.json();
       clearTimeout(slowWarning);
       setDemoMode(false);
